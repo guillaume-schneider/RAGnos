@@ -1,0 +1,47 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+*.so
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+.coverage.*
+htmlcov/
+dist/
+build/
+site/
+*.egg-info/
+
+# Virtual environments
+.venv/
+venv/
+env/
+ENV/
+
+# Local configuration
+.env
+.env.*
+.python-version
+
+# App/runtime data
+.chainlit/
+.files/
+chroma_data/
+
+# Logs
+*.log
+
+# Node / docs site
+docs-site/node_modules/
+docs-site/.docusaurus/
+docs-site/build/
+docs-site/.cache-loader/
+
+# OS / editors
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/

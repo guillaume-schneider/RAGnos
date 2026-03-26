@@ -1,14 +1,27 @@
-# Welcome to Chainlit! 🚀🤖
+# RAGnos
 
-Hi there, Developer! 👋 We're excited to have you on board. Chainlit is a powerful tool designed to help you prototype, debug and share applications built on top of LLMs.
+This assistant answers questions only from the locally indexed PDF corpus.
 
-## Useful Links 🔗
+## Before you start
 
-- **Documentation:** Get started with our comprehensive [Chainlit Documentation](https://docs.chainlit.io) 📚
-- **Discord Community:** Join our friendly [Chainlit Discord](https://discord.gg/k73SQ3FyUh) to ask questions, share your projects, and connect with other developers! 💬
+1. Put PDF files in `documents/`
+2. Run `uv run python ingest.py`
+3. Start the app with `uv run chainlit run main.py`
 
-We can't wait to see what you create with Chainlit! Happy coding! 💻😊
+## Runtime requirements
 
-## Welcome screen
+- Ollama must be running
+- The `mistral` and `nomic-embed-text` models must be available
+- Redis is optional, but it improves repeated-answer latency
 
-To modify the welcome screen, edit the `chainlit.md` file at the root of your project. If you do not want a welcome screen, just leave this file empty.
+## When documents change
+
+This app does not rebuild the index during chat startup.
+
+If you add, remove, or replace PDF files, run:
+
+```powershell
+uv run python ingest.py
+```
+
+Then start a new chat.

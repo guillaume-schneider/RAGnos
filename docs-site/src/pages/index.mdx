@@ -1,0 +1,109 @@
+import Link from "@docusaurus/Link";
+import Layout from "@theme/Layout";
+
+export default function Home() {
+  return (
+    <Layout
+      title="RAGnos Documentation"
+      description="Technical documentation for the RAGnos local RAG application"
+    >
+      <main className="docsHome">
+        <section className="landingHero">
+          <div className="landingHeroInner">
+            <p className="landingEyebrow">RAGnos Documentation</p>
+            <h1>Local RAG documentation without the noise.</h1>
+            <p className="landingLead">
+              Architecture, ingest flow, runtime pipeline, and API reference for
+              the current implementation.
+            </p>
+
+            <div className="landingActions">
+              <Link className="button button--primary button--lg" to="/docs/intro">
+                Read the docs
+              </Link>
+              <Link className="button button--outline button--lg" to="/docs/api-reference">
+                API reference
+              </Link>
+            </div>
+
+            <div className="landingStats">
+              <div className="landingStat">
+                <span>Stack</span>
+                <strong>Chainlit, Ollama, Chroma, Redis</strong>
+              </div>
+              <div className="landingStat">
+                <span>Mode</span>
+                <strong>Local and internal</strong>
+              </div>
+              <div className="landingStat">
+                <span>Core files</span>
+                <strong>`src/ragnos/app.py`, `core.py`, `ingest.py`</strong>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <section className="landingSection">
+          <div className="landingSectionHeader">
+            <p className="landingSectionLabel">Start here</p>
+            <h2>Move from overview to implementation details.</h2>
+          </div>
+
+          <div className="landingGrid">
+            <Link className="landingCard landingCardPrimary" to="/docs/intro">
+              <span className="landingCardIndex">01</span>
+              <h3>Introduction</h3>
+              <p>Understand what the project is, which stack it uses, and how the local workflow runs.</p>
+            </Link>
+
+            <Link className="landingCard" to="/docs/architecture">
+              <span className="landingCardIndex">02</span>
+              <h3>Architecture</h3>
+              <p>See the module split, storage model, runtime responsibilities, and service boundaries.</p>
+            </Link>
+
+            <Link className="landingCard" to="/docs/pipeline">
+              <span className="landingCardIndex">03</span>
+              <h3>Pipeline</h3>
+              <p>Follow ingestion, startup validation, retrieval, generation, cache behavior, and failure paths.</p>
+            </Link>
+
+            <Link className="landingCard" to="/docs/api-reference">
+              <span className="landingCardIndex">04</span>
+              <h3>API Reference</h3>
+              <p>Inspect the CLI, environment variables, runtime objects, and core helper functions.</p>
+            </Link>
+          </div>
+        </section>
+
+        <section className="landingSection landingSectionTight">
+          <div className="landingStrip">
+            <div className="landingStripText">
+              <p className="landingSectionLabel">Reading path</p>
+              <h2>Read the overview first, then dive by concern.</h2>
+            </div>
+
+            <div className="landingList">
+              <Link className="landingListItem" to="/docs/intro">
+                <strong>Introduction</strong>
+                <span>Project goals and local workflow</span>
+              </Link>
+              <Link className="landingListItem" to="/docs/architecture">
+                <strong>Architecture</strong>
+                <span>Runtime structure and responsibilities</span>
+              </Link>
+              <Link className="landingListItem" to="/docs/pipeline">
+                <strong>Pipeline</strong>
+                <span>Ingestion, validation, query flow, failures</span>
+              </Link>
+              <Link className="landingListItem" to="/docs/api-reference">
+                <strong>API Reference</strong>
+                <span>Commands, settings, data objects, helper functions</span>
+              </Link>
+            </div>
+          </div>
+        </section>
+      </main>
+    </Layout>
+  );
+}

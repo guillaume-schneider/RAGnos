@@ -1,0 +1,326 @@
+:root {
+  --ifm-color-primary: #d14f2a;
+  --ifm-color-primary-dark: #bb4421;
+  --ifm-color-primary-darker: #af3f1f;
+  --ifm-color-primary-darkest: #903418;
+  --ifm-color-primary-light: #dc6848;
+  --ifm-color-primary-lighter: #e17659;
+  --ifm-color-primary-lightest: #eba086;
+  --ifm-background-color: #f3efe7;
+  --ifm-font-color-base: #1f2529;
+  --ifm-heading-color: #13191c;
+  --ifm-navbar-background-color: #131f22;
+  --ifm-footer-background-color: #131f22;
+  --ifm-font-family-base: "IBM Plex Serif", Georgia, serif;
+  --ifm-heading-font-family: "Aptos", "Segoe UI", sans-serif;
+  --docs-ink: #13191c;
+  --docs-muted: #59666d;
+  --docs-line: rgba(19, 25, 28, 0.1);
+  --docs-surface: #fffdf8;
+  --docs-surface-soft: rgba(255, 253, 248, 0.8);
+  --docs-shadow: 0 20px 40px rgba(29, 23, 15, 0.08);
+}
+
+html {
+  font-size: 18px;
+  background: #f3efe7;
+}
+
+body {
+  background:
+    radial-gradient(circle at 15% 10%, rgba(209, 79, 42, 0.16), transparent 26%),
+    radial-gradient(circle at 85% 14%, rgba(43, 108, 126, 0.14), transparent 24%),
+    linear-gradient(180deg, #f7f3eb 0%, #efe8db 100%);
+  color: var(--docs-ink);
+}
+
+.navbar {
+  box-shadow: none;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.navbar__brand,
+.navbar__link,
+.navbar-sidebar__brand {
+  color: #fff7ec;
+}
+
+.navbar__brand:hover,
+.navbar__link:hover {
+  color: #ffb08e;
+}
+
+.footer {
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.docsHome {
+  padding: 0 0 5rem;
+}
+
+.landingHero {
+  padding: 4.5rem min(5vw, 4rem) 2rem;
+}
+
+.landingHeroInner {
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 4rem;
+  border: 1px solid var(--docs-line);
+  border-radius: 36px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.75), rgba(255, 250, 241, 0.92)),
+    linear-gradient(135deg, #fffdf8 0%, #f7f0e4 100%);
+  box-shadow: var(--docs-shadow);
+}
+
+.landingEyebrow,
+.landingSectionLabel {
+  margin: 0 0 1rem;
+  font-size: 0.8rem;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary-dark);
+}
+
+.landingHeroInner h1 {
+  margin: 0;
+  max-width: 11ch;
+  font-size: clamp(3.8rem, 7vw, 6.8rem);
+  line-height: 0.9;
+  letter-spacing: -0.055em;
+  text-wrap: balance;
+}
+
+.landingLead {
+  max-width: 38ch;
+  margin: 1.5rem 0 0;
+  font-size: 1.35rem;
+  line-height: 1.6;
+  color: var(--docs-muted);
+}
+
+.landingActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.9rem;
+  margin-top: 2rem;
+}
+
+.landingActions .button {
+  border-radius: 999px;
+  padding-inline: 1.35rem;
+}
+
+.landingActions .button--outline {
+  background: transparent;
+  border: 1px solid rgba(19, 25, 28, 0.18);
+  color: var(--docs-ink);
+}
+
+.landingStats {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 1rem;
+  margin-top: 2.5rem;
+}
+
+.landingStat {
+  padding: 1.1rem 1.15rem;
+  border-radius: 18px;
+  border: 1px solid var(--docs-line);
+  background: var(--docs-surface-soft);
+}
+
+.landingStat span {
+  display: block;
+  margin-bottom: 0.35rem;
+  font-size: 0.74rem;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ifm-color-primary-dark);
+}
+
+.landingSection {
+  width: min(100%, 1320px);
+  margin: 0 auto;
+  padding: 1rem min(5vw, 4rem) 0;
+}
+
+.landingSectionHeader {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 1.5rem;
+}
+
+.landingSectionHeader h2,
+.landingStripText h2 {
+  margin: 0;
+  max-width: 16ch;
+  font-size: clamp(2rem, 3.2vw, 3.4rem);
+  line-height: 0.96;
+  letter-spacing: -0.04em;
+}
+
+.landingGrid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.landingCard {
+  display: block;
+  min-height: 260px;
+  padding: 1.5rem;
+  border: 1px solid var(--docs-line);
+  border-radius: 24px;
+  background: var(--docs-surface-soft);
+  color: var(--docs-ink);
+  text-decoration: none;
+  box-shadow: 0 12px 28px rgba(29, 23, 15, 0.06);
+  transition:
+    transform 140ms ease,
+    box-shadow 140ms ease,
+    border-color 140ms ease;
+}
+
+.landingCardPrimary {
+  background: linear-gradient(180deg, #1d2d31 0%, #22373b 100%);
+  color: #fff7ec;
+}
+
+.landingCardIndex {
+  display: inline-block;
+  margin-bottom: 1rem;
+  font-size: 0.9rem;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+  color: var(--ifm-color-primary-dark);
+}
+
+.landingCardPrimary .landingCardIndex {
+  color: #f2bb99;
+}
+
+.landingCard h3 {
+  margin-bottom: 0.8rem;
+  font-size: 2rem;
+  line-height: 1;
+}
+
+.landingCard p {
+  margin: 0;
+  line-height: 1.65;
+  color: var(--docs-muted);
+}
+
+.landingCardPrimary p {
+  color: rgba(255, 247, 236, 0.82);
+}
+
+.landingCard:hover,
+.landingListItem:hover {
+  transform: translateY(-4px);
+  text-decoration: none;
+}
+
+.landingCard:hover {
+  border-color: rgba(209, 79, 42, 0.28);
+  box-shadow: 0 18px 34px rgba(29, 23, 15, 0.1);
+}
+
+.landingSectionTight {
+  padding-top: 2rem;
+}
+
+.landingStrip {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.9fr) minmax(0, 1.1fr);
+  gap: 1.25rem;
+  padding: 1.5rem 0 0;
+}
+
+.landingList {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1rem;
+}
+
+.landingListItem {
+  display: block;
+  padding: 1.25rem 1.3rem;
+  border: 1px solid var(--docs-line);
+  border-radius: 22px;
+  background: var(--docs-surface-soft);
+  color: var(--docs-ink);
+  text-decoration: none;
+  box-shadow: 0 10px 24px rgba(29, 23, 15, 0.06);
+}
+
+.landingListItem strong {
+  display: block;
+  margin-bottom: 0.45rem;
+  font-family: var(--ifm-heading-font-family);
+  font-size: 1.2rem;
+}
+
+.landingListItem span {
+  color: var(--docs-muted);
+  line-height: 1.55;
+}
+
+@media (max-width: 1100px) {
+  html {
+    font-size: 17px;
+  }
+
+  .landingStats,
+  .landingGrid,
+  .landingStrip,
+  .landingList {
+    grid-template-columns: 1fr;
+  }
+
+  .landingHeroInner {
+    padding: 2.6rem;
+  }
+
+  .landingHeroInner h1,
+  .landingLead,
+  .landingSectionHeader h2,
+  .landingStripText h2 {
+    max-width: none;
+  }
+}
+
+@media (max-width: 640px) {
+  html {
+    font-size: 16px;
+  }
+
+  .landingHero {
+    padding: 2rem 0.8rem 1rem;
+  }
+
+  .landingSection {
+    padding-inline: 0.8rem;
+  }
+
+  .landingHeroInner {
+    padding: 1.6rem;
+    border-radius: 24px;
+  }
+
+  .landingHeroInner h1 {
+    font-size: 3rem;
+  }
+
+  .landingCard,
+  .landingListItem {
+    border-radius: 18px;
+  }
+}
