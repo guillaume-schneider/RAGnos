@@ -1,99 +1,54 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 import sys
-import time
 from pathlib import Path
-from typing import Any
+from typing import Iterable
 
 import chainlit as cl
-import redis.asyncio as redis
-from redis.exceptions import RedisError
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from ragnos.core import (
-    AppConfig,
-    INGEST_COMMAND,
-    build_cache_key,
-    build_cache_namespace,
-    build_prompt,
-    create_embeddings,
-    create_llm,
-    format_docs,
-    load_config,
-    log_event,
-    open_vectorstore,
-    validate_runtime_readiness,
-)
+from ragnos.cache import build_cache_namespace
+from ragnos.config import AppConfig, ConfigError, INGEST_COMMAND, load_config
+from ragnos.documents import list_pdf_paths
+from ragnos.health import build_health_report, format_health_report
+from ragnos.indexing import ingest_corpus, validate_runtime_readiness
+from ragnos.runtime import RuntimeState, build_runtime_state, close_runtime_state, run_query
+from ragnos.telemetry import log_event
 
-CONFIG = load_config()
+PDF_ACCEPT = ["application/pdf"]
+UPLOAD_MAX_FILES = 10
+UPLOAD_MAX_SIZE_MB = 100
 
-
-class RuntimeState:
-    def __init__(
-        self,
-        *,
-        config: AppConfig,
-        docs_fingerprint: str,
-        cache_namespace: str,
-        redis_client: Any | None,
-        redis_ok: bool,
-        embeddings: Any,
-        vectorstore: Any,
-        retriever: Any,
-        llm: Any,
-        prompt_text: str,
-        prompt: Any,
-    ) -> None:
-        self.config = config
-        self.docs_fingerprint = docs_fingerprint
-        self.cache_namespace = cache_namespace
-        self.redis_client = redis_client
-        self.redis_ok = redis_ok
-        self.embeddings = embeddings
-        self.vectorstore = vectorstore
-        self.retriever = retriever
-        self.llm = llm
-        self.prompt_text = prompt_text
-        self.prompt = prompt
+try:
+    CONFIG = load_config()
+    CONFIG_ERROR: str | None = None
+except ConfigError as exc:
+    CONFIG = None
+    CONFIG_ERROR = str(exc)
 
 
 _runtime_lock = asyncio.Lock()
 _runtime_state: RuntimeState | None = None
 
 
-async def build_runtime_state(config: AppConfig, docs_fingerprint: str) -> RuntimeState:
-    redis_client = None
-    redis_ok = False
+def _runtime_unavailable_message() -> str:
+    if CONFIG_ERROR:
+        return f"Configuration invalide : {CONFIG_ERROR}"
+    return f"Impossible d'ouvrir l'index local.\nExecutez `{INGEST_COMMAND}`."
 
-    try:
-        redis_client = redis.from_url(config.redis_url, decode_responses=True)
-        await redis_client.ping()
-        redis_ok = True
-    except Exception as exc:
-        log_event({"event": "redis_unavailable", "error": str(exc)})
 
-    embeddings = create_embeddings(config)
-    vectorstore = open_vectorstore(config, embeddings)
-    retriever = vectorstore.as_retriever(search_kwargs={"k": config.top_k})
-    llm = create_llm(config)
-    prompt = build_prompt(config)
-
-    return RuntimeState(
-        config=config,
-        docs_fingerprint=docs_fingerprint,
-        cache_namespace=build_cache_namespace(config, docs_fingerprint),
-        redis_client=redis_client,
-        redis_ok=redis_ok,
-        embeddings=embeddings,
-        vectorstore=vectorstore,
-        retriever=retriever,
-        llm=llm,
-        prompt_text=config.prompt_text,
-        prompt=prompt,
+def _ready_message(state: RuntimeState, pdf_count: int) -> str:
+    return (
+        "Systeme pret.\n"
+        f"- Redis : {'ON' if state.redis_ok else 'OFF'}\n"
+        f"- PDFs : {pdf_count}\n"
+        "- Index : ready\n"
+        "- Commandes : /upload, /refresh, /status"
     )
 
 
@@ -112,13 +67,136 @@ async def get_runtime_state(config: AppConfig, docs_fingerprint: str) -> Runtime
         return _runtime_state
 
 
+async def reset_runtime_state() -> None:
+    global _runtime_state
+
+    async with _runtime_lock:
+        previous_state = _runtime_state
+        _runtime_state = None
+
+    await close_runtime_state(previous_state)
+
+
+def _extract_pdf_uploads(elements: Iterable[object] | None) -> list[object]:
+    uploads: list[object] = []
+    for element in elements or []:
+        path = getattr(element, "path", None)
+        name = getattr(element, "name", "")
+        mime = getattr(element, "mime", None) or getattr(element, "type", None)
+        if not path:
+            continue
+        if mime == "application/pdf" or str(name).lower().endswith(".pdf"):
+            uploads.append(element)
+    return uploads
+
+
+def _persist_uploaded_pdfs(config: AppConfig, uploads: Iterable[object]) -> list[Path]:
+    config.docs_dir.mkdir(parents=True, exist_ok=True)
+    saved_paths: list[Path] = []
+    for upload in uploads:
+        source_path = Path(getattr(upload, "path"))
+        target_name = Path(getattr(upload, "name", source_path.name)).name
+        target_path = config.docs_dir / target_name
+        shutil.copyfile(source_path, target_path)
+        saved_paths.append(target_path)
+    return saved_paths
+
+
+async def _ask_for_pdf_uploads() -> list[object]:
+    response = await cl.AskFileMessage(
+        content="Chargez un ou plusieurs PDF pour lancer ou enrichir le corpus local.",
+        accept=PDF_ACCEPT,
+        max_size_mb=UPLOAD_MAX_SIZE_MB,
+        max_files=UPLOAD_MAX_FILES,
+        timeout=180,
+    ).send()
+    return list(response or [])
+
+
+async def _reindex_and_reload(config: AppConfig, initial_message: str) -> RuntimeState | None:
+    progress = await cl.Message(content=initial_message).send()
+
+    try:
+        result = await asyncio.to_thread(ingest_corpus, config)
+    except Exception as exc:
+        log_event({"event": "ingest_failed", "error": str(exc)})
+        progress.content = f"Echec de l'indexation : {exc}"
+        await progress.update()
+        return None
+
+    await reset_runtime_state()
+    validation = validate_runtime_readiness(config)
+    if not validation.is_ready or not validation.docs_fingerprint:
+        progress.content = validation.message
+        await progress.update()
+        return None
+
+    state = await get_runtime_state(config, validation.docs_fingerprint)
+    cl.user_session.set("runtime_state", state)
+
+    progress.content = (
+        "Indexation terminee.\n"
+        f"- PDFs totaux : {result.pdf_count}\n"
+        f"- PDFs indexes : {result.indexed_pdf_count}\n"
+        f"- PDFs supprimes : {result.deleted_pdf_count}\n"
+        f"- Chunks traites : {result.chunk_count}"
+    )
+    await progress.update()
+    return state
+
+
+async def _handle_upload_request(config: AppConfig, uploads: list[object] | None = None) -> RuntimeState | None:
+    resolved_uploads = uploads if uploads is not None else await _ask_for_pdf_uploads()
+    if not resolved_uploads:
+        await cl.Message(content="Aucun PDF recu. Utilisez /upload pour recommencer.").send()
+        return None
+
+    saved_paths = _persist_uploaded_pdfs(config, resolved_uploads)
+    log_event(
+        {
+            "event": "upload_saved",
+            "files": [path.name for path in saved_paths],
+            "target_dir": str(config.docs_dir),
+        }
+    )
+
+    return await _reindex_and_reload(config, f"{len(saved_paths)} PDF(s) recu(s), indexation en cours...")
+
+
+async def _handle_refresh_request(config: AppConfig) -> RuntimeState | None:
+    if not list_pdf_paths(config.docs_dir):
+        await cl.Message(content="Aucun PDF disponible. Utilisez /upload pour ajouter des documents.").send()
+        return None
+    return await _reindex_and_reload(config, "Rafraichissement de l'index en cours...")
+
+
+async def _handle_status_request(config: AppConfig) -> None:
+    report = await build_health_report(config)
+    await cl.Message(content=format_health_report(report)).send()
+
+
 @cl.on_chat_start
 async def on_chat_start() -> None:
-    msg = await cl.Message(content="â³ Initialisation du systeme RAG...").send()
+    msg = await cl.Message(content="Initialisation du systeme RAG...").send()
+
+    if CONFIG is None:
+        msg.content = _runtime_unavailable_message()
+        await msg.update()
+        return
 
     validation = validate_runtime_readiness(CONFIG)
+    if validation.status in {"missing_docs_dir", "no_pdfs"}:
+        msg.content = "Aucun corpus pret. Chargez des PDF pour demarrer."
+        await msg.update()
+        state = await _handle_upload_request(CONFIG)
+        if state is None:
+            return
+        pdf_count = len(list_pdf_paths(CONFIG.docs_dir))
+        await cl.Message(content=_ready_message(state, pdf_count)).send()
+        return
+
     if not validation.is_ready or not validation.docs_fingerprint:
-        msg.content = validation.message
+        msg.content = validation.message + "\nUtilisez /refresh pour indexer le corpus existant."
         await msg.update()
         return
 
@@ -126,7 +204,7 @@ async def on_chat_start() -> None:
         state = await get_runtime_state(CONFIG, validation.docs_fingerprint)
     except Exception as exc:
         log_event({"event": "runtime_init_failed", "error": str(exc)})
-        msg.content = f"âŒ Impossible d'ouvrir l'index local.\nExecutez `{INGEST_COMMAND}`."
+        msg.content = f"Impossible d'ouvrir l'index local.\nExecutez `{INGEST_COMMAND}`."
         await msg.update()
         return
 
@@ -142,89 +220,83 @@ async def on_chat_start() -> None:
         }
     )
 
-    msg.content = (
-        "âœ… Systeme pret.\n"
-        f"- Redis : {'ON' if state.redis_ok else 'OFF'}\n"
-        f"- PDFs : {validation.pdf_count}\n"
-        "- Index : ready"
-    )
+    msg.content = _ready_message(state, validation.pdf_count)
     await msg.update()
 
 
 @cl.on_message
 async def on_message(message: cl.Message) -> None:
-    start_total = time.perf_counter()
     state: RuntimeState | None = cl.user_session.get("runtime_state")
+
+    if CONFIG is None:
+        await cl.Message(content=_runtime_unavailable_message()).send()
+        return
+
+    question = message.content.strip()
+
+    if question == "/status":
+        await _handle_status_request(CONFIG)
+        return
+
+    if question == "/upload":
+        await _handle_upload_request(CONFIG)
+        return
+
+    if question == "/refresh":
+        await _handle_refresh_request(CONFIG)
+        return
+
+    uploaded_pdfs = _extract_pdf_uploads(getattr(message, "elements", None))
+    if uploaded_pdfs:
+        state = await _handle_upload_request(CONFIG, uploads=uploaded_pdfs)
+        if not question:
+            return
 
     if state is None:
         validation = validate_runtime_readiness(CONFIG)
         if not validation.is_ready or not validation.docs_fingerprint:
-            await cl.Message(content=validation.message).send()
+            await cl.Message(content=validation.message + "\nUtilisez /upload ou /refresh.").send()
             return
         try:
             state = await get_runtime_state(CONFIG, validation.docs_fingerprint)
         except Exception as exc:
             log_event({"event": "runtime_init_failed", "error": str(exc)})
-            await cl.Message(content=f"âŒ Impossible d'ouvrir l'index local.\nExecutez `{INGEST_COMMAND}`.").send()
+            await cl.Message(content=f"Impossible d'ouvrir l'index local.\nExecutez `{INGEST_COMMAND}`.").send()
             return
         cl.user_session.set("runtime_state", state)
 
-    question = message.content.strip()
-    cache_key = build_cache_key(question, state.cache_namespace)
+    if not question:
+        await cl.Message(content="Documents indexes. Posez maintenant votre question.").send()
+        return
+
     ui_msg = await cl.Message(content="").send()
+    result = await run_query(state, question, stream_callback=ui_msg.stream_token)
 
-    if state.redis_ok and state.redis_client:
-        try:
-            cached = await state.redis_client.get(cache_key)
-            if cached:
-                ui_msg.content = cached
-                await ui_msg.update()
-                log_event(
-                    {
-                        "event": "cache_hit",
-                        "question": question,
-                        "docs_fingerprint": state.docs_fingerprint,
-                    }
-                )
-                return
-        except RedisError as exc:
-            log_event({"event": "redis_read_error", "error": str(exc)})
+    if result.cache_hit:
+        ui_msg.content = result.answer
+        await ui_msg.update()
+        log_event(
+            {
+                "event": "cache_hit",
+                "question": question,
+                "docs_fingerprint": state.docs_fingerprint,
+            }
+        )
+        return
 
-    retrieval_start = time.perf_counter()
-    docs = await state.retriever.ainvoke(question)
-    retrieval_ms = (time.perf_counter() - retrieval_start) * 1000
-
-    context = format_docs(docs)
-    final_prompt = state.prompt.invoke({"context": context, "input": question})
-
-    llm_start = time.perf_counter()
-    answer = ""
-    async for chunk in state.llm.astream(final_prompt):
-        token = chunk.content or ""
-        answer += token
-        await ui_msg.stream_token(token)
-
-    llm_ms = (time.perf_counter() - llm_start) * 1000
     await ui_msg.update()
-
-    if state.redis_ok and state.redis_client:
-        try:
-            await state.redis_client.set(cache_key, answer, ex=state.config.cache_ttl)
-        except RedisError as exc:
-            log_event({"event": "redis_write_error", "error": str(exc)})
-
-    total_ms = (time.perf_counter() - start_total) * 1000
-    sources = sorted({Path(doc.metadata.get("source", "")).name for doc in docs})
 
     log_event(
         {
             "event": "rag_query",
             "question": question,
-            "chunks_used": len(docs),
-            "sources": sources,
-            "retrieval_ms": round(retrieval_ms, 2),
-            "llm_ms": round(llm_ms, 2),
-            "total_ms": round(total_ms, 2),
+            "chunks_used": result.chunks_used,
+            "sources": result.sources,
+            "citations": [{"source": citation.source, "page": citation.page} for citation in result.citations],
+            "retrieval_ms": round(result.retrieval_ms, 2),
+            "first_token_ms": round(result.first_token_ms, 2),
+            "llm_ms": round(result.generation_ms, 2),
+            "total_ms": round(result.total_ms, 2),
             "cache_enabled": state.redis_ok,
             "docs_fingerprint": state.docs_fingerprint,
         }

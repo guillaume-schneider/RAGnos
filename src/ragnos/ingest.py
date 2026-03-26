@@ -3,27 +3,34 @@ from __future__ import annotations
 import argparse
 import sys
 from pathlib import Path
+from typing import Sequence
 
 SRC_DIR = Path(__file__).resolve().parents[1]
 if str(SRC_DIR) not in sys.path:
     sys.path.insert(0, str(SRC_DIR))
 
-from ragnos.core import IngestError, ingest_corpus, load_config, log_event
+from ragnos.config import ConfigError, load_config
+from ragnos.indexing import IngestError, ingest_corpus
+from ragnos.telemetry import log_event
 
 
-def parse_args() -> argparse.Namespace:
+def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build or refresh the local RAG index.")
     parser.add_argument("--docs-dir", help="Directory containing PDF files.")
     parser.add_argument("--chroma-dir", help="Directory used for the Chroma index.")
-    return parser.parse_args()
+    return parser.parse_args(argv)
 
 
-def main() -> int:
-    args = parse_args()
-    config = load_config(
-        docs_dir=args.docs_dir,
-        chroma_dir=args.chroma_dir,
-    )
+def main(argv: Sequence[str] | None = None) -> int:
+    args = parse_args(argv)
+    try:
+        config = load_config(
+            docs_dir=args.docs_dir,
+            chroma_dir=args.chroma_dir,
+        )
+    except ConfigError as exc:
+        print(f"ERROR: {exc}", file=sys.stderr)
+        return 1
 
     try:
         result = ingest_corpus(config)

@@ -1,0 +1,1 @@
+{"id":"refusal_unknown_token","question":"Quelle est la signification de ZZZZ_UNLIKELY_TOKEN_9F4A17B2 dans les documents ?","must_contain":["Je ne trouve pas"],"must_not_contain":["Sources:"],"expect_refusal":true}

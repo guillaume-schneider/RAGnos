@@ -5,7 +5,7 @@ This assistant answers questions only from the locally indexed PDF corpus.
 ## Before you start
 
 1. Put PDF files in `documents/`
-2. Run `uv run python ingest.py`
+2. Define the system prompt in `.prompt`
 3. Start the app with `uv run chainlit run main.py`
 
 ## Runtime requirements
@@ -14,14 +14,44 @@ This assistant answers questions only from the locally indexed PDF corpus.
 - The `mistral` and `nomic-embed-text` models must be available
 - Redis is optional, but it improves repeated-answer latency
 
-## When documents change
+## Useful commands
 
-This app does not rebuild the index during chat startup.
-
-If you add, remove, or replace PDF files, run:
+Rebuild the index:
 
 ```powershell
 uv run python ingest.py
 ```
 
-Then start a new chat.
+Run a healthcheck:
+
+```powershell
+uv run python healthcheck.py
+```
+
+Run the local benchmark:
+
+```powershell
+uv run python benchmark.py --question "Votre question" --repetitions 3
+```
+
+Run the seed eval suite:
+
+```powershell
+uv run python evals.py --dataset evals/regression.jsonl
+```
+
+## When documents or prompts change
+
+This app supports in-chat management commands:
+
+- `/upload`
+- `/refresh`
+- `/status`
+
+You can still refresh from the terminal with:
+
+```powershell
+uv run python ingest.py
+```
+
+Answers include a `Sources` block built from the retrieved pages.
