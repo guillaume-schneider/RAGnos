@@ -8,6 +8,13 @@ This assistant answers questions only from the locally indexed PDF corpus.
 2. Define the system prompt in `.prompt`
 3. Start the app with `uv run chainlit run main.py`
 
+The app now uses a local login so conversation history can be persisted and reopened from the left sidebar.
+
+Default local credentials:
+
+- username: `admin`
+- password: `ragnos`
+
 ## Runtime requirements
 
 - Ollama must be running
@@ -55,3 +62,5 @@ uv run python ingest.py
 ```
 
 Answers include a `Sources` block built from the retrieved pages.
+
+Conversations are stored locally and can be resumed from the sidebar history after login.

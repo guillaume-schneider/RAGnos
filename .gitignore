@@ -15,6 +15,7 @@ build/
 site/
 *.egg-info/
 chroma_data-build*
+/research
 
 # Virtual environments
 .venv/

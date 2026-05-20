@@ -1,0 +1,356 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[french]{babel}
+\usepackage{csquotes}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{graphicx}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[backend=biber,style=authoryear,sorting=nyt]{biblatex}
+
+\geometry{margin=2.5cm}
+\setlength{\parskip}{0.65em}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{leftmargin=1.2cm}
+\setlist[enumerate]{leftmargin=1.2cm}
+\renewcommand{\arraystretch}{1.2}
+\graphicspath{{docs/c4/}{c4/}}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue,
+  pdftitle={RAGnos : rapport de projet pour assistant juridique RAG},
+  pdfauthor={Projet RAGnos}
+}
+
+\addbibresource{rapport_ragnos_juridique.bib}
+
+\title{\textbf{RAGnos : assistant conversationnel RAG pour consultation juridique}\\
+\large Rapport de projet}
+\author{Projet RAGnos}
+\date{20 mai 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Ce rapport présente le prototype RAGnos, un assistant conversationnel fondé sur la génération augmentée par la recherche (\emph{Retrieval-Augmented Generation}, RAG), conçu pour répondre à des questions à partir d'un corpus documentaire local. Le cas d'usage retenu est celui d'un consultant juridique ayant besoin d'interroger des jurisprudences, codes de loi et documents internes sans exposer de données sensibles à un service externe. Le document replace le projet dans l'état actuel de l'intelligence artificielle, analyse les solutions existantes du marché juridique, décrit l'architecture technique du prototype et tire un retour d'expérience sur ses limites. L'objectif n'est pas de présenter RAGnos comme un produit juridique finalisé, mais comme une base fonctionnelle et maîtrisable pour expérimenter un assistant fiable, sourcé et améliorable.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Introduction : état actuel de l'intelligence artificielle}
+
+L'intelligence artificielle est entrée dans une phase de diffusion rapide. Les grands modèles de langage ne sont plus seulement des démonstrateurs de génération de texte : ils sont devenus des interfaces de travail pour la recherche documentaire, la rédaction, l'analyse de contrats, l'aide au code, la relation client, la synthèse de dossiers et l'automatisation de processus. Le rapport \emph{AI Index 2026} de Stanford décrit une accélération nette des capacités et de l'adoption : les modèles progressent dans le raisonnement, le code, les usages multimodaux et les tâches agentiques, tandis que l'usage organisationnel devient largement répandu \autocite{stanfordAIIndex2026}. McKinsey observe de son côté que la plupart des organisations utilisent déjà l'IA dans au moins une fonction, mais que la majorité reste encore au stade de l'expérimentation ou du pilote plutôt qu'à celui d'une transformation industrielle complète \autocite{mckinseyStateAI2025}.
+
+Cette situation crée une tension structurante. D'un côté, les modèles généralistes sont devenus suffisamment performants pour produire des synthèses, détecter des régularités, reformuler des contenus complexes et assister des professionnels qualifiés. De l'autre, leur fonctionnement probabiliste les expose à des erreurs de factualité, à des réponses excessivement confiantes et à des approximations difficiles à détecter lorsqu'un utilisateur n'a pas accès à la source. Le problème est particulièrement critique dans le domaine juridique : une réponse plausible mais fausse peut entraîner une mauvaise interprétation d'un texte, une citation inexistante ou une décision opérationnelle risquée.
+
+Le besoin auquel répond RAGnos naît de cette limite. Un assistant utile pour des utilisateurs juridiques ne doit pas seulement \enquote{bien parler}. Il doit savoir d'où vient l'information, signaler ce qu'il ignore, citer les documents exploités et rester dans le périmètre documentaire autorisé. La génération augmentée par la recherche répond à cette exigence en combinant deux briques : un moteur de recherche sémantique qui récupère les passages pertinents, puis un modèle de langage chargé de formuler une réponse à partir de ces passages. Le modèle n'est donc pas censé mobiliser librement sa mémoire interne ; il doit s'appuyer sur le contexte fourni.
+
+Cette approche ne supprime pas tous les risques. Stanford HAI a montré que même des outils de recherche juridique spécialisés, reposant sur des mécanismes de récupération documentaire, peuvent encore produire des erreurs significatives \autocite{stanfordLegalHallucinations2024}. Les travaux récents sur \emph{Legal RAG Bench} rappellent aussi que la qualité du \emph{retrieval} fixe souvent le plafond de performance d'un système RAG juridique : si les bons passages ne sont pas récupérés, le meilleur modèle ne peut pas produire une réponse correctement fondée \autocite{legalRAGBench2026}. Le projet RAGnos doit donc être lu comme une architecture de réduction du risque, non comme une garantie absolue.
+
+\section{Portée du projet}
+
+\subsection{Objectif fonctionnel}
+
+RAGnos est un prototype local de chatbot RAG. Son objectif est de permettre à un utilisateur d'interroger un ensemble de documents PDF placés dans un répertoire local, puis d'obtenir une réponse conversationnelle qui s'appuie exclusivement sur les passages récupérés dans ce corpus. Le prototype vise un besoin interne : fournir un assistant capable d'aider un consultant juridique à explorer des textes, jurisprudences, documents de doctrine, notes internes ou extraits de codes, tout en conservant un contrôle fort sur les sources utilisées.
+
+La portée du projet se résume en quatre principes.
+
+\begin{itemize}
+  \item \textbf{Ancrage documentaire} : les réponses doivent être fondées sur les documents fournis, non sur une connaissance générale invérifiable.
+  \item \textbf{Traçabilité} : les réponses doivent afficher les sources utilisées, au minimum sous la forme du nom de fichier et du numéro de page.
+  \item \textbf{Exécution locale} : le modèle, les embeddings, l'index vectoriel et l'interface fonctionnent sur l'environnement local de l'utilisateur.
+  \item \textbf{Prototype améliorable} : l'application doit rester simple à lancer, tester, mesurer et faire évoluer.
+\end{itemize}
+
+Le prompt système matérialise cette intention. Il indique que l'assistant doit utiliser uniquement le contexte fourni et répondre explicitement qu'il ne trouve pas l'information si celle-ci n'est pas présente dans les documents. Cette règle est centrale pour un contexte juridique : un refus contrôlé vaut mieux qu'une réponse élégante mais non sourcée.
+
+\subsection{Périmètre exclu}
+
+RAGnos n'est pas un moteur juridique complet comparable à LexisNexis, Westlaw, Doctrine ou Dalloz. Il ne dispose pas d'un corpus propriétaire enrichi, de citator, de vérification automatique de l'état d'une jurisprudence, de versioning juridique officiel ou de garantie de consolidation temporelle des textes. Il ne remplace pas non plus un avocat ou un juriste : il assiste la consultation documentaire et la synthèse, mais la validation du raisonnement juridique reste humaine.
+
+Le prototype ne met pas encore en oeuvre de contrôle d'accès par rôle, d'espaces documentaires isolés par utilisateur, de workflow de validation juridique, de recherche hybride BM25 + embeddings, de reranking ou de graphe de connaissances. Ces éléments figurent dans les pistes d'amélioration, mais ne doivent pas être confondus avec l'état actuel du produit \autocite{ragnosRecommendations}.
+
+\section{Solutions existantes et état du marché}
+
+\subsection{Une segmentation par corpus et par workflow}
+
+La recherche réalisée dans le dossier \texttt{research/} montre que le marché de l'IA juridique s'est structuré autour d'une idée simple : l'avantage compétitif ne vient pas seulement du modèle de langage, mais de l'accès au bon corpus, de son enrichissement éditorial, de la qualité des citations et de l'intégration au workflow métier \autocite{researchLegalAIExhaustif,researchLegalRAGState}. Les outils ne répondent pas tous au même besoin. Certains visent la recherche jurisprudentielle, d'autres la rédaction, d'autres l'analyse contractuelle ou la gestion du cycle de vie des contrats.
+
+\begin{longtable}{p{3.1cm}p{4.2cm}p{4.5cm}p{3.2cm}}
+\caption{Synthèse des solutions existantes pertinentes pour le projet}\\
+\toprule
+\textbf{Solution} & \textbf{Positionnement} & \textbf{Forces principales} & \textbf{Limites pour RAGnos}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Solution} & \textbf{Positionnement} & \textbf{Forces principales} & \textbf{Limites pour RAGnos}\\
+\midrule
+\endhead
+Lexis+ AI / Protégé & Recherche, rédaction et analyse juridique intégrées à l'écosystème LexisNexis. & Corpus juridique riche, sources secondaires, Shepard's Citations, citations liées. & Solution fermée, coûteuse, dépendante d'un corpus propriétaire et d'une licence. \\
+Westlaw / CoCounsel & Assistant professionnel adossé à Thomson Reuters, Westlaw et Practical Law. & Profondeur documentaire, KeyCite, recherche assistée, workflows avancés. & Transparence limitée du pipeline et coût élevé pour de petites structures. \\
+vLex / Vincent AI & Recherche juridique internationale et travail multijuridictionnel. & Très grande couverture internationale, documents éditorialisés, citations cliquables. & Architecture exacte peu publique ; valeur dépendante de l'abonnement au corpus. \\
+Harvey AI & Copilote entreprise pour grands cabinets, directions juridiques et fiscalité. & Analyse documentaire, rédaction, workflows, intégrations avec sources partenaires. & Positionnement enterprise, coût élevé, dépendance aux sources intégrées. \\
+Paxton AI & Assistant juridique orienté validation de recherche et citations. & Focus sur la vérifiabilité, prix plus accessible, ciblage des praticiens US. & Couverture surtout américaine ; profondeur éditoriale moindre que les grands éditeurs. \\
+Doctrine & Plateforme française/européenne de recherche, analyse et rédaction. & Corpus français, workflow avocat/juriste, hébergement européen, intégrations documentaires. & Produit propriétaire ; ne répond pas au besoin d'un prototype local maîtrisé. \\
+Lexbase / GenIA-L & IA juridique francophone adossée à des fonds éditoriaux. & Sources doctrinales et éditoriales structurées, réponses documentées, contexte français. & Écosystèmes fermés et économiques d'abonnement. \\
+LegalOn / Spellbook & Revue contractuelle, rédaction, playbooks et intégration Word. & Forte valeur sur contrats, clauses, redlining et standards internes. & Moins adapté à une recherche large en jurisprudence ou codes. \\
+Ordalie & RAG privé sécurisé pour cabinets et documents internes. & Proximité avec le besoin de confidentialité, souveraineté et corpus privé. & Offre externe ; RAGnos explore une base interne et locale. \\
+\bottomrule
+\end{longtable}
+
+Cette comparaison éclaire le positionnement de RAGnos. Le prototype ne cherche pas à concurrencer les plateformes riches en corpus éditorial. Il explore plutôt une version locale et légère du principe RAG : charger ses propres documents, les indexer, interroger le corpus, afficher les sources et refuser ce qui n'est pas documenté.
+
+\subsection{Les bases officielles et privées}
+
+Les sources officielles comme Légifrance, EUR-Lex et HUDOC ont une autorité normative forte \autocite{legifranceOpenData,eurlex,hudoc}. Elles sont indispensables pour un assistant juridique francophone ou européen. Mais elles ne fournissent pas toujours l'expérience complète attendue par un professionnel : liens doctrinaux, résumés éditoriaux, citators, historiques d'autorité, filtres métiers, tableaux de comparaison ou playbooks. Les bases privées ajoutent cette couche d'organisation, mais au prix d'un accès contractuel, d'une dépendance fournisseur et parfois d'une moindre transparence technique.
+
+Pour RAGnos, cette distinction est importante. Le prototype peut ingérer des exports ou documents PDF issus de sources autorisées, mais il ne résout pas à lui seul les questions de licence, d'exhaustivité ou de mise à jour. La qualité du résultat dépendra directement de la qualité du corpus fourni. Un corpus incomplet donnera des réponses incomplètes, même si l'architecture RAG est correcte.
+
+\section{Produit, besoins et vision}
+
+\subsection{Besoins du consultant juridique}
+
+Le consultant juridique travaille avec des sources longues, techniques et changeantes. Il doit vérifier un point de droit, identifier des décisions pertinentes, comprendre l'application d'un article, synthétiser une doctrine, retrouver une exception ou comparer plusieurs documents. Dans ce contexte, un assistant conversationnel apporte de la valeur s'il permet de formuler une question en langage naturel sans connaître à l'avance les mots exacts du document.
+
+Les besoins principaux sont les suivants :
+
+\begin{itemize}
+  \item \textbf{Recherche rapide} : retrouver des passages pertinents sans parcourir manuellement des dizaines de pages.
+  \item \textbf{Compréhension} : obtenir une synthèse lisible d'un texte dense.
+  \item \textbf{Vérifiabilité} : revenir aux pages sources pour contrôler l'interprétation.
+  \item \textbf{Confidentialité} : ne pas envoyer les documents sensibles à un service externe non maîtrisé.
+  \item \textbf{Maîtrise du coût} : éviter les coûts d'abonnement élevés pour un prototype ou un usage interne limité.
+  \item \textbf{Refus fiable} : obtenir une réponse négative lorsque le corpus ne contient pas l'information.
+\end{itemize}
+
+\subsection{Vision produit}
+
+La vision de RAGnos est celle d'un assistant documentaire local, spécialisé par le corpus que l'utilisateur lui fournit. Le produit ne prétend pas posséder une compétence juridique autonome ; il agit comme une interface intelligente au-dessus d'une base documentaire. Cette vision est volontairement plus modeste que les promesses commerciales d'un assistant juridique universel. Elle est aussi plus défendable techniquement : le périmètre est clair, les sources sont visibles et le comportement peut être évalué.
+
+À court terme, la valeur du produit réside dans trois usages :
+
+\begin{enumerate}
+  \item \textbf{Question-réponse sourcée} sur un ensemble de PDF.
+  \item \textbf{Exploration de corpus} avec affichage des pages utilisées.
+  \item \textbf{Prototypage interne} pour mesurer la faisabilité d'un assistant juridique avant investissement plus lourd.
+\end{enumerate}
+
+À moyen terme, RAGnos pourrait évoluer vers un outil plus métier : gestion de collections par dossier, filtres par type de source, date, juridiction, statut du texte, enrichissement des citations, évaluation de la pertinence des sources et workflow de validation humaine. La vision reste néanmoins centrée sur l'aide à la consultation, pas sur la délégation complète du raisonnement juridique.
+
+\section{Architecture technique et fonctionnalités}
+
+\subsection{Vue d'ensemble}
+
+RAGnos est construit autour d'une pile locale composée de Chainlit pour l'interface conversationnelle, Ollama pour l'exécution locale des modèles, Chroma pour l'index vectoriel, Redis pour le cache optionnel et une base SQLite locale pour l'historique de conversation \autocite{ragnosReadme,ragnosProjectDocumentation}. Le modèle de génération par défaut est \texttt{mistral} via Ollama ; le modèle d'embeddings est \texttt{nomic-embed-text}. Ces choix privilégient la simplicité de déploiement, le contrôle local et un coût d'expérimentation faible \autocite{ollama,chainlit,chroma,redis}.
+
+L'architecture a été représentée selon le modèle C4 afin de distinguer le contexte système, les conteneurs techniques, les composants applicatifs et les flux dynamiques principaux. La figure~\ref{fig:c4-system-context} montre le périmètre global : RAGnos est utilisé par un consultant juridique et maintenu par un opérateur interne, avec Ollama comme service local externe au système applicatif.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth,height=0.72\textheight,keepaspectratio]{SystemContext.png}
+  \caption{Vue C4 niveau 1 : contexte système de RAGnos.}
+  \label{fig:c4-system-context}
+\end{figure}
+
+\begin{center}
+\begin{tabular}{p{4cm}p{9cm}}
+\toprule
+\textbf{Brique} & \textbf{Rôle dans RAGnos}\\
+\midrule
+Chainlit & Interface de chat, login local, commandes opérateur, affichage des réponses et sources. \\
+Ollama & Exécution locale du LLM et du modèle d'embeddings. \\
+Chroma & Stockage persistant des vecteurs et récupération des passages proches de la question. \\
+Redis & Cache optionnel des réponses pour réduire la latence des questions répétées. \\
+SQLite & Persistance locale de l'historique de conversation via le data layer Chainlit. \\
+Fichiers PDF & Corpus documentaire placé dans \texttt{documents/}. \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+La figure~\ref{fig:c4-containers} détaille les conteneurs principaux : l'interface Chainlit, le runtime Python, l'index Chroma, le cache Redis, l'historique SQLite, le corpus PDF local, l'état d'index et les fichiers de configuration ou d'évaluation.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth,height=0.72\textheight,keepaspectratio]{Containers.png}
+  \caption{Vue C4 niveau 2 : conteneurs techniques et stockages locaux.}
+  \label{fig:c4-containers}
+\end{figure}
+
+La figure~\ref{fig:c4-components} descend au niveau des composants Python. Elle correspond aux modules principaux du package \texttt{src/ragnos/} : configuration, application Chainlit, runtime RAG, ingestion, catalogue documentaire, cache, prompts, healthcheck, benchmark et évaluations.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth,height=0.78\textheight,keepaspectratio]{Components.png}
+  \caption{Vue C4 niveau 3 : composants applicatifs Python de RAGnos.}
+  \label{fig:c4-components}
+\end{figure}
+
+\subsection{Pipeline d'ingestion}
+
+L'ingestion est séparée du démarrage du chat depuis la phase 1 du projet \autocite{ragnosPhaseOne}. Cette décision est structurante : le serveur de chat n'a pas à relire et réindexer tous les documents à chaque session. L'opérateur peut lancer :
+
+\begin{verbatim}
+uv run python ingest.py
+\end{verbatim}
+
+Le pipeline découvre les PDF dans \texttt{documents/}, calcule des empreintes documentaires, charge les pages, découpe les textes en fragments, génère les embeddings et met à jour Chroma. Depuis la phase 3, cette ingestion est incrémentale : un fichier \texttt{manifest.json} stocke l'état des documents indexés, leurs hash, leurs pages et leurs identifiants de chunks \autocite{ragnosPhaseThree}. Les documents inchangés sont évités, les nouveaux ou modifiés sont réindexés, et les documents supprimés voient leurs chunks retirés.
+
+Cette logique répond à un besoin pratique : dans un corpus juridique vivant, un document peut être ajouté, remplacé ou supprimé sans justifier un rebuild complet. Le prototype conserve toutefois un fallback vers une reconstruction complète lorsque le manifeste ou le store Chroma est incohérent.
+
+La figure~\ref{fig:c4-ingest-flow} représente ce flux d'ingestion incrémentale : upload ou refresh, persistance des PDF, comparaison du manifeste, calcul des embeddings et mise à jour de Chroma.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth,height=0.72\textheight,keepaspectratio]{IngestFlow.png}
+  \caption{Vue dynamique C4 : ingestion incrémentale d'un corpus PDF.}
+  \label{fig:c4-ingest-flow}
+\end{figure}
+
+\subsection{Pipeline de requête}
+
+Lorsqu'un utilisateur pose une question, RAGnos suit un chemin déterministe :
+
+\begin{enumerate}
+  \item normalisation de la question ;
+  \item calcul d'une clé de cache incluant le fingerprint documentaire, le prompt, le modèle et les paramètres de retrieval ;
+  \item recherche éventuelle dans Redis ;
+  \item récupération des \texttt{top\_k} chunks dans Chroma ;
+  \item formatage du contexte ;
+  \item appel du LLM local ;
+  \item ajout d'un bloc \texttt{Sources:} construit par le code, non par le modèle ;
+  \item mise en cache de la réponse rendue.
+\end{enumerate}
+
+Le point important est la génération déterministe des citations. Les sources ne sont pas demandées au modèle sous forme libre ; elles sont extraites des métadonnées des documents récupérés. Cela réduit le risque de citation inventée. En revanche, cela ne prouve pas que chaque phrase de la réponse soit parfaitement supportée par chaque source. Pour atteindre ce niveau, il faudrait une génération ancrée plus fine, idéalement proposition par proposition.
+
+La figure~\ref{fig:c4-query-flow} montre le chemin d'une question : passage par Chainlit, orchestration par le composant applicatif, calcul de la clé de cache, retrieval dans Chroma, génération via Ollama, cache Redis et retour d'une réponse sourcée.
+
+\begin{figure}[htbp]
+  \centering
+  \includegraphics[width=\textwidth,height=0.72\textheight,keepaspectratio]{QueryFlow.png}
+  \caption{Vue dynamique C4 : traitement d'une question RAG sourcée.}
+  \label{fig:c4-query-flow}
+\end{figure}
+
+\subsection{Commandes opérateur}
+
+Le prototype inclut des commandes Chainlit simples :
+
+\begin{itemize}
+  \item \texttt{/upload} : ajouter des PDF depuis l'interface et déclencher l'ingestion ;
+  \item \texttt{/refresh} : revalider et rouvrir l'état runtime après changement de corpus ;
+  \item \texttt{/status} : afficher un résumé de disponibilité du système.
+\end{itemize}
+
+Ces commandes transforment l'application en outil manipulable sans passer constamment par le terminal. Elles sont adaptées à un prototype interne : un utilisateur non développeur peut charger un document, rafraîchir l'index et vérifier l'état du système.
+
+\subsection{Outillage de contrôle}
+
+RAGnos contient trois outils de validation complémentaires :
+
+\begin{itemize}
+  \item \textbf{healthcheck} : vérifie le prompt, le dossier de documents, l'index, Chroma, Redis et Ollama ;
+  \item \textbf{benchmark} : mesure le temps de démarrage, retrieval, premier token, génération et total ;
+  \item \textbf{evals} : exécute un jeu de régression JSONL contre la pile locale.
+\end{itemize}
+
+Cet outillage est important pour un projet RAG. Une modification de prompt, de chunking, de modèle ou de top-k peut améliorer un exemple visible tout en dégradant d'autres questions. Les tests unitaires et les evals permettent de détecter ces régressions, même si le jeu actuel reste encore limité \autocite{ragnosPhaseTwo,ragnosPhaseThree}.
+
+\section{Réflexion sur l'état actuel de l'IA juridique}
+
+\subsection{Le RAG comme garde-fou, pas comme garantie}
+
+L'IA juridique actuelle repose de plus en plus sur des architectures RAG, mais il serait dangereux de présenter le RAG comme une solution magique. Stanford HAI observe que les outils juridiques spécialisés réduisent certaines erreurs par rapport aux chatbots généralistes, sans éliminer les hallucinations \autocite{stanfordLegalHallucinations2024}. Legal RAG Bench va dans le même sens : une partie importante des erreurs vient d'échecs de récupération, ce qui signifie que la génération n'est que la deuxième moitié du problème \autocite{legalRAGBench2026}.
+
+Dans un assistant juridique, le risque ne se limite pas à inventer une décision. Une réponse peut citer un document réel mais ne pas répondre à la bonne question, ignorer une exception, mélanger des versions temporelles d'un texte, omettre une condition d'application ou présenter comme actuel un état du droit dépassé. Le RAG réduit le champ d'improvisation du modèle, mais il ne dispense pas d'une conception rigoureuse du corpus et des métadonnées.
+
+\subsection{Le corpus comme actif principal}
+
+Les solutions du marché montrent que la valeur se concentre dans les corpus : droit primaire, jurisprudence, doctrine, citators, commentaires, guides pratiques, contrats, historiques de négociation et métadonnées. Lexis+ AI, Westlaw, vLex, Doctrine, Lexbase ou Dalloz ne vendent pas uniquement une interface conversationnelle ; ils vendent l'accès à des bases structurées et enrichies \autocite{researchLegalRAGState,lexisProtege,westlawAI,vlexVincent,doctrine,dallozGenIAL}.
+
+Cette observation a une conséquence directe pour RAGnos. Le prototype sera pertinent si le corpus fourni est pertinent. Pour un consultant juridique, cela suppose de sélectionner les PDF avec soin : textes applicables, décisions à jour, doctrine fiable, documents internes validés, périmètre de juridiction et date de référence explicites. Sans cette discipline, l'outil peut donner une réponse sourcée mais incomplète.
+
+\subsection{Versioning, temporalité et juridiction}
+
+Le droit est temporel. Un article peut être modifié, abrogé, renuméroté ou interprété différemment selon la date, la juridiction et le type de contentieux. Une base vectorielle pure n'a pas naturellement conscience de cette temporalité. Un ancien texte peut rester sémantiquement proche d'une question actuelle et être récupéré par erreur.
+
+Les documents de recherche internes insistent donc sur le versioning juridique, les métadonnées temporelles et les graphes de relations \autocite{researchLegalAIExhaustif,researchLegalRAGState}. Un assistant juridique robuste devrait filtrer les sources avant retrieval selon la date d'application, la juridiction, le type de norme et le statut de consolidation. RAGnos ne le fait pas encore de manière systématique ; il affiche les sources mais ne certifie pas leur actualité juridique.
+
+\subsection{Recherche hybride, reranking et graphes}
+
+La recherche vectorielle est utile pour retrouver des concepts exprimés différemment. Elle peut rapprocher \enquote{licenciement injustifié} de \enquote{rupture abusive du contrat de travail}. Mais elle est moins fiable pour les références exactes, comme un numéro d'article, une date, un nom de partie ou une citation précise. Pour le droit, l'état de l'art raisonnable combine donc :
+
+\begin{itemize}
+  \item une recherche lexicale ou BM25 pour les références exactes ;
+  \item une recherche vectorielle pour les concepts ;
+  \item un reranker pour réordonner les candidats ;
+  \item des métadonnées juridiques pour filtrer ;
+  \item éventuellement un graphe de connaissances pour les relations normatives.
+\end{itemize}
+
+RAGnos implémente aujourd'hui la couche vectorielle locale. C'est suffisant pour un prototype, mais insuffisant pour prétendre à une recherche juridique professionnelle exhaustive.
+
+\subsection{Validation humaine}
+
+Enfin, la validation humaine reste centrale. Dans un contexte juridique, l'IA doit préparer, accélérer et expliquer, mais pas décider seule. Les travaux de recherche et les retours du marché convergent sur ce point : la fiabilité réelle dépend d'un workflow où les sources sont contrôlables, où les incertitudes sont visibles et où un professionnel valide les conclusions avant usage externe.
+
+\section{Retour d'expérience : limites et améliorations possibles}
+
+\subsection{Ce qui fonctionne bien}
+
+Le projet a déjà franchi plusieurs étapes importantes. L'évaluation initiale du dépôt soulignait déjà la pertinence de la pile locale Chainlit, Ollama, Chroma et Redis, tout en identifiant des limites de cycle de vie et de maintenance \autocite{ragnosAssessment}. Depuis, l'architecture est modulaire, l'ingestion est séparée du runtime, le cache est mieux borné, le prompt est externalisé, les citations sont ajoutées de manière déterministe et l'application dispose de commandes opérateur utiles. Les phases successives ont transformé un prototype RAG simple en base locale plus propre : ingestion explicite en phase 1, modularisation et benchmark en phase 2, ingestion incrémentale, upload, citations, healthcheck et evals en phase 3 \autocite{ragnosPhaseOne,ragnosPhaseTwo,ragnosPhaseThree}.
+
+Ce socle est cohérent avec le besoin initial. Il permet de démontrer rapidement la valeur d'un assistant documentaire juridique, tout en gardant une pile compréhensible par une petite équipe.
+
+\subsection{Limites actuelles}
+
+Les limites les plus importantes ne viennent pas du choix d'un modèle particulier, mais des garde-fous métier encore absents.
+
+\begin{itemize}
+  \item \textbf{Retrieval faible ou vide} : le système dépend encore beaucoup du prompt pour refuser. Un refus explicite côté code lorsque le retrieval est vide ou de mauvaise qualité serait plus sûr.
+  \item \textbf{Absence de score threshold} : les passages récupérés sont utilisés même si leur pertinence est faible.
+  \item \textbf{Pas de recherche hybride} : les références exactes peuvent être moins bien traitées qu'avec une combinaison BM25 + embeddings.
+  \item \textbf{Pas de versioning juridique} : le système ne sait pas distinguer automatiquement un texte en vigueur d'un texte abrogé.
+  \item \textbf{Citations de granularité limitée} : les sources sont affichées par page, mais pas liées à chaque proposition de la réponse.
+  \item \textbf{Sécurité prototype} : les identifiants par défaut, l'ouverture locale et la politique d'upload doivent être durcis avant usage élargi.
+  \item \textbf{Évaluation encore limitée} : les evals actuelles sont utiles mais ne couvrent pas assez de cas métier, refus attendus, citations attendues et budgets de latence.
+\end{itemize}
+
+\subsection{Améliorations prioritaires}
+
+Les améliorations les plus utiles à court terme sont pragmatiques :
+
+\begin{enumerate}
+  \item Ajouter un refus déterministe si aucun chunk n'est récupéré, ou si la pertinence minimale n'est pas atteinte.
+  \item Ajouter une commande \texttt{/list} pour afficher les documents indexés, leurs pages, chunks et dates d'indexation.
+  \item Enrichir les evals avec des questions juridiques négatives, des sources attendues et des cas de confusion entre documents.
+  \item Charger explicitement le fichier \texttt{.env} afin de rendre la configuration plus reproductible.
+  \item Supprimer ou clarifier la double persistance de l'historique entre SQLite et transcripts JSON.
+  \item Ajouter un lint, un typecheck et une CI légère pour stabiliser les évolutions.
+\end{enumerate}
+
+À moyen terme, l'amélioration principale serait la recherche hybride. Elle répond directement à la nature du droit : les utilisateurs posent souvent des questions conceptuelles, mais ils demandent aussi des articles, dates, arrêts et références exactes. La combinaison d'un index lexical et d'un index vectoriel serait plus robuste qu'un seul espace d'embeddings.
+
+À plus long terme, un assistant juridique réellement fiable devrait intégrer des métadonnées de juridiction, date d'effet, type de source, statut du texte, autorité de la décision et relation entre normes. C'est ici que les graphes de connaissances et les API officielles comme Légifrance ou EUR-Lex pourraient compléter le RAG local.
+
+\section{Conclusion}
+
+RAGnos démontre qu'un assistant RAG local peut répondre à un besoin réel : interroger un corpus documentaire juridique sans dépendre d'un service externe et en affichant les sources utilisées. Le prototype est adapté à une exploration interne, à une preuve de concept et à la montée en compétence sur les architectures RAG. Il ne doit cependant pas être présenté comme un outil juridique autonome ou comme un système sans hallucination.
+
+La leçon principale du projet est que la fiabilité juridique est une propriété d'architecture, pas seulement de modèle. Elle dépend du corpus, du découpage, du retrieval, des métadonnées, du prompt, des citations, des tests, de l'interface et de la validation humaine. RAGnos pose les premières briques : ingestion locale, recherche vectorielle, génération contrôlée, sources déterministes et outillage de validation. Les prochaines itérations devront renforcer la recherche, les refus, l'évaluation et la gestion juridique du temps pour rapprocher le prototype d'un usage professionnel.
+
+\printbibliography
+
+\end{document}

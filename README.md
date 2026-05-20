@@ -66,6 +66,18 @@ uv run python ingest.py
 uv run chainlit run main.py
 ```
 
+The app now uses a local login so Chainlit can persist and list conversation threads in the left sidebar.
+
+Default local credentials:
+
+- username: `admin`
+- password: `ragnos`
+
+You can override them with:
+
+- `CHAINLIT_AUTH_USERNAME`
+- `CHAINLIT_AUTH_PASSWORD`
+
 Inside chat, the main operator commands are:
 
 - `/upload`
@@ -127,6 +139,7 @@ uv run python evals.py --dataset evals/regression.jsonl
 - If the index is missing or stale, the app will guide you toward `/upload` or `/refresh`.
 - Redis is optional. If Redis is unavailable, the app still answers queries without caching.
 - Answers now include a deterministic `Sources` block built from retrieved pages.
+- Conversations are now persisted locally in `.files/history.sqlite3` and can be reopened from the Chainlit sidebar.
 
 ## Tests
 
@@ -140,5 +153,6 @@ Run the unit tests with:
 
 - Technical reference: `docs/PROJECT_DOCUMENTATION.md`
 - Assessment: `docs/ASSESSMENT.md`
+- Improvement recommendations: `docs/RECOMMANDATIONS_AMELIORATION.md`
 - Phase 1 summary: `docs/PHASE_1_IMPLEMENTATION.md`
 - Docusaurus site: `docs-site/`
