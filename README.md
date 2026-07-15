@@ -1,158 +1,97 @@
 # RAGnos
 
-Local RAG prototype built with Chainlit, Ollama, Chroma, and Redis.
+RAGnos est un assistant documentaire local destine a l'information generale des proches de patients hospitalises en reanimation. Il interroge un corpus de documents medicaux valides (PDF et transcriptions pedagogiques) et affiche les sources utilisees dans chaque reponse.
 
-The codebase is now organized around a modular `src/ragnos/` package. The root-level `main.py`, `ingest.py`, `benchmark.py`, and `rag_core.py` files are compatibility wrappers so the operator commands stay short.
+Le projet ne fournit ni diagnostic, ni prescription, ni information sur la situation particuliere d'un patient. Les questions individuelles doivent etre adressees a l'equipe soignante.
 
-## Repository Layout
+## Fonctionnement
 
-```text
-src/ragnos/
-  app.py         Chainlit runtime
-  benchmark.py   Local latency benchmark CLI
-  cache.py       Cache namespace and key helpers
-  catalog.py     Per-document index manifest helpers
-  config.py      Config loading and validation
-  core.py        Compatibility facade over the package modules
-  documents.py   PDF discovery, fingerprinting, chunking, formatting
-  evals.py       Local regression eval runner
-  health.py      Health report helpers
-  healthcheck.py Healthcheck CLI
-  indexing.py    Index validation, ingest, vector store, and model helpers
-  ingest.py      CLI entrypoint for index builds
-  prompts.py     Prompt-file loading and prompt template construction
-  runtime.py     Shared runtime state and query execution
-  telemetry.py   JSON event logging
-docs/            Project documentation
-docs-site/       Docusaurus documentation site
-documents/       Source PDF corpus
-tests/           Unit tests
-main.py          Chainlit wrapper entrypoint
-ingest.py        CLI wrapper entrypoint
-benchmark.py     Benchmark wrapper entrypoint
-healthcheck.py   Healthcheck wrapper entrypoint
-evals.py         Eval runner wrapper entrypoint
-rag_core.py      Legacy import wrapper
-```
+Le corpus est indexe localement, puis les passages les plus pertinents sont recuperes pour construire une reponse sourcee. La pile technique repose sur Chainlit, Ollama, Chroma, Redis (optionnel) et SQLite pour l'historique local.
 
-## Local Workflow
+## Prerequis
 
-1. Start Redis:
+- Python et `uv`
+- Ollama, avec les modeles configures
+- Docker Desktop, si le cache Redis est utilise
+
+## Demarrage
+
+1. Demarrer Redis (facultatif) :
 
 ```powershell
 docker compose up -d redis
 ```
 
-2. Make sure Ollama is running and the required models are available:
+2. Telecharger les modeles configures par defaut :
 
 ```powershell
 ollama pull mistral
 ollama pull nomic-embed-text
 ```
 
-3. Put your PDF files in `documents/`.
+3. Placer les documents PDF et les transcriptions JSON dans `tools/extracts/`.
 
-4. Make sure the system prompt is defined in `.prompt`.
+4. Verifier le prompt systeme dans `.prompt`.
 
-5. Build or refresh the vector index:
+5. Construire ou mettre a jour l'index :
 
 ```powershell
 uv run python ingest.py
 ```
 
-6. Start the Chainlit app:
+6. Lancer l'application :
 
 ```powershell
 uv run chainlit run main.py
 ```
 
-The app now uses a local login so Chainlit can persist and list conversation threads in the left sidebar.
+Les identifiants locaux par defaut sont `admin` / `ragnos`. Ils peuvent etre remplaces avec `CHAINLIT_AUTH_USERNAME` et `CHAINLIT_AUTH_PASSWORD`.
 
-Default local credentials:
+## Commandes dans l'application
 
-- username: `admin`
-- password: `ragnos`
+- `/upload` : ajouter des documents au corpus ;
+- `/refresh` : actualiser l'index apres une modification du corpus ;
+- `/status` : afficher l'etat des dependances et de l'index.
 
-You can override them with:
-
-- `CHAINLIT_AUTH_USERNAME`
-- `CHAINLIT_AUTH_PASSWORD`
-
-Inside chat, the main operator commands are:
-
-- `/upload`
-- `/refresh`
-- `/status`
-
-## Benchmark
-
-Run a local uncached latency benchmark with:
-
-```powershell
-uv run python benchmark.py --question "Quel est l'article applicable ?" --repetitions 3
-```
-
-This reports:
-
-- `startup_ms`
-- `retrieval_ms`
-- `first_token_ms`
-- `generation_ms`
-- `total_ms`
-- `chunks_used`
-
-## Healthcheck
-
-Run a local dependency and readiness check with:
+## Verification et evaluation
 
 ```powershell
 uv run python healthcheck.py
-```
-
-## Evals
-
-Run the seed regression dataset with:
-
-```powershell
 uv run python evals.py --dataset evals/regression.jsonl
+uv run python benchmark.py --question "Pourquoi parle-t-on de coma artificiel ?" --repetitions 3
 ```
 
-## Environment Variables
-
-- `DOCS_DIR`: PDF directory. Default: `./documents`
-- `CHROMA_DIR`: persisted Chroma directory. Default: `./chroma_data`
-- `REDIS_URL`: Redis connection string. Default: `redis://localhost:6379/0`
-- `OLLAMA_BASE_URL`: Ollama base URL. Default: `http://localhost:11434`
-- `CACHE_TTL`: Redis cache TTL in seconds. Default: `3600`
-- `CHUNK_SIZE`: chunk size used during splitting. Default: `800`
-- `CHUNK_OVERLAP`: chunk overlap used during splitting. Default: `100`
-- `TOP_K`: retriever `k` value. Default: `4`
-- `EMBEDDING_MODEL`: Ollama embedding model. Default: `nomic-embed-text`
-- `LLM_MODEL`: Ollama chat model. Default: `mistral`
-- `PROMPT_PATH`: system prompt file. Default: `./.prompt`
-
-## Notes
-
-- `.prompt` is the source of truth for the system prompt.
-- Chat startup can now onboard an empty workspace through PDF upload.
-- `ingest.py` now updates the index incrementally and falls back to a full rebuild only when needed.
-- If the index is missing or stale, the app will guide you toward `/upload` or `/refresh`.
-- Redis is optional. If Redis is unavailable, the app still answers queries without caching.
-- Answers now include a deterministic `Sources` block built from retrieved pages.
-- Conversations are now persisted locally in `.files/history.sqlite3` and can be reopened from the Chainlit sidebar.
-
-## Tests
-
-Run the unit tests with:
+Les tests unitaires peuvent etre executes avec :
 
 ```powershell
 .\.venv\Scripts\python.exe -m unittest discover -s tests -v
 ```
 
-## Documentation
+## Configuration
 
-- Technical reference: `docs/PROJECT_DOCUMENTATION.md`
-- Assessment: `docs/ASSESSMENT.md`
-- Improvement recommendations: `docs/RECOMMANDATIONS_AMELIORATION.md`
-- Phase 1 summary: `docs/PHASE_1_IMPLEMENTATION.md`
-- Docusaurus site: `docs-site/`
+| Variable | Role | Valeur par defaut |
+| --- | --- | --- |
+| `DOCS_DIR` | Repertoire du corpus | `./tools/extracts` |
+| `CHROMA_DIR` | Repertoire de l'index | `./chroma_data` |
+| `REDIS_URL` | Connexion Redis | `redis://localhost:6379/0` |
+| `OLLAMA_BASE_URL` | Adresse d'Ollama | `http://localhost:11434` |
+| `LLM_MODEL` | Modele de generation | `mistral` |
+| `EMBEDDING_MODEL` | Modele d'embeddings | `nomic-embed-text` |
+| `TOP_K` | Nombre de passages recuperes | `4` |
+| `CHUNK_SIZE` | Taille des fragments | `800` |
+| `CHUNK_OVERLAP` | Chevauchement des fragments | `100` |
+| `CACHE_TTL` | Duree du cache, en secondes | `3600` |
+| `PROMPT_PATH` | Fichier de prompt | `./.prompt` |
+
+## Organisation
+
+```text
+src/ragnos/      Application et pipeline d'indexation
+tools/extracts/  Corpus medical local
+evals/            Jeu d'evaluation
+tests/            Tests unitaires
+docs/             Documentation technique et rapport de projet
+docs-site/        Site de documentation
+```
+
+Pour la documentation technique et le pipeline, consulter `docs/PROJECT_DOCUMENTATION.md`.

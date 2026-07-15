@@ -66,7 +66,7 @@ class IngestTests(unittest.TestCase):
                 prompt_path=str(prompt_path),
             )
 
-            with patch("ragnos.indexing.load_all_pdfs") as load_mock, patch("ragnos.indexing.build_chroma_store") as build_mock:
+            with patch("ragnos.indexing.load_all_documents") as load_mock, patch("ragnos.indexing.build_chroma_store") as build_mock:
                 result = ingest_corpus(config)
 
         self.assertEqual(result.status, "up_to_date")
@@ -100,15 +100,15 @@ class IngestTests(unittest.TestCase):
                 (persist_directory / "index.bin").write_text("new", encoding="utf-8")
                 return object()
 
-            with patch("ragnos.indexing.load_all_pdfs", return_value=(fake_docs, [pdf_path])) as load_mock, patch(
+            with patch("ragnos.indexing.load_all_documents", return_value=(fake_docs, [pdf_path])) as load_mock, patch(
                 "ragnos.indexing.create_embeddings", return_value=object()
             ) as embeddings_mock, patch("ragnos.indexing.build_chroma_store", side_effect=fake_build) as build_mock:
                 result = ingest_corpus(config)
 
             catalog = read_catalog(chroma_dir)
             self.assertEqual(result.status, "rebuilt")
-            self.assertEqual(result.pdf_count, 1)
-            self.assertEqual(result.indexed_pdf_count, 1)
+            self.assertEqual(result.document_count, 1)
+            self.assertEqual(result.indexed_document_count, 1)
             self.assertTrue(load_mock.called)
             self.assertTrue(embeddings_mock.called)
             self.assertTrue(build_mock.called)
@@ -166,10 +166,10 @@ class IngestTests(unittest.TestCase):
 
             with patch("ragnos.indexing.create_embeddings", return_value=object()), patch(
                 "ragnos.indexing.open_vectorstore", return_value=vectorstore
-            ), patch("ragnos.indexing.load_all_pdfs") as load_mock:
+            ), patch("ragnos.indexing.load_all_documents") as load_mock:
                 result = ingest_corpus(config)
 
-            self.assertEqual(result.deleted_pdf_count, 1)
+            self.assertEqual(result.deleted_document_count, 1)
             self.assertEqual(vectorstore.deleted_ids, [["b.pdf:hash-b:0:0"]])
             load_mock.assert_not_called()
 
@@ -224,12 +224,12 @@ class IngestTests(unittest.TestCase):
 
             with patch("ragnos.indexing.create_embeddings", return_value=object()), patch(
                 "ragnos.indexing.open_vectorstore", return_value=vectorstore
-            ), patch("ragnos.indexing.load_all_pdfs", return_value=(raw_docs, [pdf_path])), patch(
+            ), patch("ragnos.indexing.load_all_documents", return_value=(raw_docs, [pdf_path])), patch(
                 "ragnos.indexing.split_documents", return_value=split_docs
             ):
                 result = ingest_corpus(config)
 
-            self.assertEqual(result.indexed_pdf_count, 1)
+            self.assertEqual(result.indexed_document_count, 1)
             self.assertEqual(vectorstore.deleted_ids, [["sample.pdf:old-hash:0:0"]])
             self.assertEqual(len(vectorstore.added_ids), 1)
             catalog = read_catalog(chroma_dir)

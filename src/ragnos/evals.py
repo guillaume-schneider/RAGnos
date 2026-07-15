@@ -30,7 +30,7 @@ class EvalCase:
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Run local RAG regression evals against a JSONL dataset.")
     parser.add_argument("--dataset", default="evals/regression.jsonl", help="Path to a JSONL eval dataset.")
-    parser.add_argument("--docs-dir", help="Directory containing PDF files.")
+    parser.add_argument("--docs-dir", help="Directory containing PDF and JSON corpus files.")
     parser.add_argument("--chroma-dir", help="Directory used for the Chroma index.")
     return parser.parse_args(argv)
 

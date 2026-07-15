@@ -17,7 +17,7 @@ from ragnos.telemetry import log_event
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Check local RAG dependencies and index readiness.")
-    parser.add_argument("--docs-dir", help="Directory containing PDF files.")
+    parser.add_argument("--docs-dir", help="Directory containing PDF and JSON corpus files.")
     parser.add_argument("--chroma-dir", help="Directory used for the Chroma index.")
     return parser.parse_args(argv)
 

@@ -1,10 +1,10 @@
 # RAGnos
 
-This assistant answers questions only from the locally indexed PDF corpus.
+This assistant answers questions only from the locally indexed ICU information corpus.
 
 ## Before you start
 
-1. Put PDF files in `documents/`
+1. Put PDF or JSON files in `tools/extracts/`
 2. Define the system prompt in `.prompt`
 3. Start the app with `uv run chainlit run main.py`
 
@@ -61,6 +61,6 @@ You can still refresh from the terminal with:
 uv run python ingest.py
 ```
 
-Answers include a `Sources` block built from the retrieved pages.
+Answers include a `Sources` block built from the retrieved pages or transcripts.
 
 Conversations are stored locally and can be resumed from the sidebar history after login.

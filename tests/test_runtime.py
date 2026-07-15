@@ -31,3 +31,21 @@ class RuntimeCitationTests(unittest.TestCase):
 
         self.assertIn("Sources:", rendered)
         self.assertIn("a.pdf", rendered)
+
+    def test_render_answer_labels_video_transcripts(self) -> None:
+        docs = [
+            Document(
+                page_content="A",
+                metadata={
+                    "source": "tools/extracts/famille.json",
+                    "page": "transcript",
+                    "chunk_index": 0,
+                    "source_type": "video_transcript",
+                },
+            )
+        ]
+        citations = build_citations(docs)
+
+        rendered = render_answer("Reponse", citations)
+
+        self.assertIn("famille.json (transcript video)", rendered)

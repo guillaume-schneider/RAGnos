@@ -6,7 +6,7 @@ from pathlib import Path
 
 from .prompts import PromptError, load_prompt_text
 
-DEFAULT_DOCS_DIR = "./documents"
+DEFAULT_DOCS_DIR = "./tools/extracts"
 DEFAULT_CHROMA_DIR = "./chroma_data"
 DEFAULT_REDIS_URL = "redis://localhost:6379/0"
 DEFAULT_OLLAMA_BASE_URL = "http://localhost:11434"

@@ -18,14 +18,14 @@ if str(SRC_DIR) not in sys.path:
 
 from ragnos.cache import build_cache_namespace
 from ragnos.config import AppConfig, ConfigError, INGEST_COMMAND, load_config
-from ragnos.documents import list_pdf_paths
+from ragnos.documents import list_document_paths
 from ragnos.health import build_health_report, format_health_report
 from ragnos.indexing import ingest_corpus, validate_runtime_readiness
 from ragnos.local_history import LocalSQLiteDataLayer
 from ragnos.runtime import RuntimeState, build_runtime_state, close_runtime_state, run_query
 from ragnos.telemetry import log_event
 
-PDF_ACCEPT = ["application/pdf"]
+DOCUMENT_ACCEPT = ["application/pdf", "application/json"]
 UPLOAD_MAX_FILES = 10
 UPLOAD_MAX_SIZE_MB = 100
 TRANSCRIPT_SESSION_KEY = "conversation_transcript"
@@ -53,11 +53,11 @@ def _runtime_unavailable_message() -> str:
     return f"Impossible d'ouvrir l'index local.\nExecutez `{INGEST_COMMAND}`."
 
 
-def _ready_message(state: RuntimeState, pdf_count: int) -> str:
+def _ready_message(state: RuntimeState, document_count: int) -> str:
     return (
         "Systeme pret.\n"
         f"- Redis : {'ON' if state.redis_ok else 'OFF'}\n"
-        f"- PDFs : {pdf_count}\n"
+        f"- Documents : {document_count}\n"
         "- Index : ready\n"
         "- Commandes : /upload, /refresh, /status"
     )
@@ -210,7 +210,7 @@ async def reset_runtime_state() -> None:
     await close_runtime_state(previous_state)
 
 
-def _extract_pdf_uploads(elements: Iterable[object] | None) -> list[object]:
+def _extract_document_uploads(elements: Iterable[object] | None) -> list[object]:
     uploads: list[object] = []
     for element in elements or []:
         path = getattr(element, "path", None)
@@ -218,12 +218,17 @@ def _extract_pdf_uploads(elements: Iterable[object] | None) -> list[object]:
         mime = getattr(element, "mime", None) or getattr(element, "type", None)
         if not path:
             continue
-        if mime == "application/pdf" or str(name).lower().endswith(".pdf"):
+        lower_name = str(name).lower()
+        if mime in DOCUMENT_ACCEPT or lower_name.endswith(".pdf") or lower_name.endswith(".json"):
             uploads.append(element)
     return uploads
 
 
-def _persist_uploaded_pdfs(config: AppConfig, uploads: Iterable[object]) -> list[Path]:
+def _extract_pdf_uploads(elements: Iterable[object] | None) -> list[object]:
+    return _extract_document_uploads(elements)
+
+
+def _persist_uploaded_documents(config: AppConfig, uploads: Iterable[object]) -> list[Path]:
     config.docs_dir.mkdir(parents=True, exist_ok=True)
     saved_paths: list[Path] = []
     for upload in uploads:
@@ -235,10 +240,14 @@ def _persist_uploaded_pdfs(config: AppConfig, uploads: Iterable[object]) -> list
     return saved_paths
 
 
-async def _ask_for_pdf_uploads() -> list[object]:
+def _persist_uploaded_pdfs(config: AppConfig, uploads: Iterable[object]) -> list[Path]:
+    return _persist_uploaded_documents(config, uploads)
+
+
+async def _ask_for_document_uploads() -> list[object]:
     response = await cl.AskFileMessage(
-        content="Chargez un ou plusieurs PDF pour lancer ou enrichir le corpus local.",
-        accept=PDF_ACCEPT,
+        content="Chargez un ou plusieurs PDF ou JSON pour lancer ou enrichir le corpus local.",
+        accept=DOCUMENT_ACCEPT,
         max_size_mb=UPLOAD_MAX_SIZE_MB,
         max_files=UPLOAD_MAX_FILES,
         timeout=180,
@@ -269,9 +278,9 @@ async def _reindex_and_reload(config: AppConfig, initial_message: str) -> Runtim
 
     progress.content = (
         "Indexation terminee.\n"
-        f"- PDFs totaux : {result.pdf_count}\n"
-        f"- PDFs indexes : {result.indexed_pdf_count}\n"
-        f"- PDFs supprimes : {result.deleted_pdf_count}\n"
+        f"- Documents totaux : {result.document_count}\n"
+        f"- Documents indexes : {result.indexed_document_count}\n"
+        f"- Documents supprimes : {result.deleted_document_count}\n"
         f"- Chunks traites : {result.chunk_count}"
     )
     await progress.update()
@@ -279,12 +288,12 @@ async def _reindex_and_reload(config: AppConfig, initial_message: str) -> Runtim
 
 
 async def _handle_upload_request(config: AppConfig, uploads: list[object] | None = None) -> RuntimeState | None:
-    resolved_uploads = uploads if uploads is not None else await _ask_for_pdf_uploads()
+    resolved_uploads = uploads if uploads is not None else await _ask_for_document_uploads()
     if not resolved_uploads:
-        await _send_recorded_message("Aucun PDF recu. Utilisez /upload pour recommencer.")
+        await _send_recorded_message("Aucun document recu. Utilisez /upload pour recommencer.")
         return None
 
-    saved_paths = _persist_uploaded_pdfs(config, resolved_uploads)
+    saved_paths = _persist_uploaded_documents(config, resolved_uploads)
     log_event(
         {
             "event": "upload_saved",
@@ -293,12 +302,12 @@ async def _handle_upload_request(config: AppConfig, uploads: list[object] | None
         }
     )
 
-    return await _reindex_and_reload(config, f"{len(saved_paths)} PDF(s) recu(s), indexation en cours...")
+    return await _reindex_and_reload(config, f"{len(saved_paths)} document(s) recu(s), indexation en cours...")
 
 
 async def _handle_refresh_request(config: AppConfig) -> RuntimeState | None:
-    if not list_pdf_paths(config.docs_dir):
-        await _send_recorded_message("Aucun PDF disponible. Utilisez /upload pour ajouter des documents.")
+    if not list_document_paths(config.docs_dir):
+        await _send_recorded_message("Aucun document disponible. Utilisez /upload pour ajouter des documents.")
         return None
     return await _reindex_and_reload(config, "Rafraichissement de l'index en cours...")
 
@@ -326,17 +335,17 @@ async def _initialize_session(*, restore_transcript: bool, replay_messages: bool
         return False
 
     validation = validate_runtime_readiness(CONFIG)
-    if validation.status in {"missing_docs_dir", "no_pdfs"}:
+    if validation.status in {"missing_docs_dir", "no_documents"}:
         if info_msg is None:
-            await _send_recorded_message("Aucun corpus pret. Chargez des PDF pour demarrer.")
+            await _send_recorded_message("Aucun corpus pret. Chargez des PDF ou JSON pour demarrer.")
         else:
-            info_msg.content = "Aucun corpus pret. Chargez des PDF pour demarrer."
+            info_msg.content = "Aucun corpus pret. Chargez des PDF ou JSON pour demarrer."
             await info_msg.update()
         state = await _handle_upload_request(CONFIG)
         if state is None:
             return False
-        pdf_count = len(list_pdf_paths(CONFIG.docs_dir))
-        await _send_recorded_message(_ready_message(state, pdf_count))
+        document_count = len(list_document_paths(CONFIG.docs_dir))
+        await _send_recorded_message(_ready_message(state, document_count))
         return True
 
     if not validation.is_ready or not validation.docs_fingerprint:
@@ -366,13 +375,13 @@ async def _initialize_session(*, restore_transcript: bool, replay_messages: bool
         {
             "event": "startup_complete",
             "redis": state.redis_ok,
-            "documents_count": validation.pdf_count,
+            "documents_count": validation.document_count,
             "docs_fingerprint": validation.docs_fingerprint,
             "index_mode": "reused",
         }
     )
 
-    ready = _ready_message(state, validation.pdf_count)
+    ready = _ready_message(state, validation.document_count)
     if info_msg is None:
         return True
     else:
@@ -430,9 +439,9 @@ async def on_message(message: cl.Message) -> None:
         await _handle_refresh_request(CONFIG)
         return
 
-    uploaded_pdfs = _extract_pdf_uploads(getattr(message, "elements", None))
-    if uploaded_pdfs:
-        state = await _handle_upload_request(CONFIG, uploads=uploaded_pdfs)
+    uploaded_documents = _extract_document_uploads(getattr(message, "elements", None))
+    if uploaded_documents:
+        state = await _handle_upload_request(CONFIG, uploads=uploaded_documents)
         if not question:
             return
 
@@ -480,7 +489,10 @@ async def on_message(message: cl.Message) -> None:
             "question": question,
             "chunks_used": result.chunks_used,
             "sources": result.sources,
-            "citations": [{"source": citation.source, "page": citation.page} for citation in result.citations],
+            "citations": [
+                {"source": citation.source, "page": citation.page, "source_type": citation.source_type}
+                for citation in result.citations
+            ],
             "retrieval_ms": round(result.retrieval_ms, 2),
             "first_token_ms": round(result.first_token_ms, 2),
             "llm_ms": round(result.generation_ms, 2),

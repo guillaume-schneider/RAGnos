@@ -51,6 +51,7 @@ class Citation:
     source: str
     page: str
     chunk_index: int
+    source_type: str = ""
 
 
 @dataclass(frozen=True, slots=True)
@@ -68,18 +69,19 @@ class QueryResult:
 
 
 def build_citations(docs: Sequence[Document]) -> list[Citation]:
-    seen: set[tuple[str, str]] = set()
+    seen: set[tuple[str, str, str]] = set()
     citations: list[Citation] = []
 
     for doc in docs:
         source = Path(doc.metadata.get("source", "inconnu")).name
         page = str(doc.metadata.get("page", "?"))
         chunk_index = int(doc.metadata.get("chunk_index", 0))
-        key = (source, page)
+        source_type = str(doc.metadata.get("source_type", ""))
+        key = (source, page, source_type)
         if key in seen:
             continue
         seen.add(key)
-        citations.append(Citation(source=source, page=page, chunk_index=chunk_index))
+        citations.append(Citation(source=source, page=page, chunk_index=chunk_index, source_type=source_type))
 
     return citations
 
@@ -90,7 +92,13 @@ def render_citations(citations: Sequence[Citation]) -> str:
 
     lines = ["", "", "Sources:"]
     for citation in citations:
-        lines.append(f"- {citation.source} (page {citation.page})")
+        if citation.source_type == "video_transcript" or citation.page == "transcript":
+            location = "transcript video"
+        elif citation.page == "json":
+            location = "document JSON"
+        else:
+            location = f"page {citation.page}"
+        lines.append(f"- {citation.source} ({location})")
     return "\n".join(lines)
 
 

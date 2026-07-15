@@ -50,7 +50,7 @@ It provides:
 - environment-based configuration loading
 - corpus discovery and fingerprinting
 - index readiness validation
-- PDF loading and chunk splitting
+- PDF/JSON loading and chunk splitting
 - Chroma build/open helpers
 - Ollama model helpers
 - prompt creation

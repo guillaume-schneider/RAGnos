@@ -14,7 +14,7 @@ Build or refresh the local vector index.
 
 Arguments:
 
-- `--docs-dir`: override the PDF corpus directory
+- `--docs-dir`: override the corpus directory
 - `--chroma-dir`: override the Chroma persistence directory
 
 The wrapper delegates to `src/ragnos/ingest.py`.
@@ -25,8 +25,8 @@ The runtime reads configuration through `load_config()` in `src/ragnos/core.py`.
 
 ## `DOCS_DIR`
 
-- purpose: PDF source directory
-- default: `./documents`
+- purpose: source directory containing PDF and JSON corpus files
+- default: `./tools/extracts`
 
 ## `CHROMA_DIR`
 

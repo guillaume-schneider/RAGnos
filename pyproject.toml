@@ -16,6 +16,7 @@ dependencies = [
     "ollama>=0.6.1",
     "pypdf>=6.9.1",
     "redis>=7.3.0",
+    "youtube-transcript-api>=1.2.4",
 ]
 
 [build-system]

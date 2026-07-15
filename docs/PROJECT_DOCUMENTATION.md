@@ -2,9 +2,7 @@
 
 ## Overview
 
-RAGnos is a local Retrieval-Augmented Generation application built around Chainlit, Ollama, Chroma, and Redis.
-
-Phase 2 reorganized the implementation into smaller modules under `src/ragnos/` and kept `src/ragnos/core.py` as a compatibility facade.
+RAGnos is a local Retrieval-Augmented Generation application built around Chainlit, Ollama, Chroma, and Redis. Its implementation is organized into small modules under `src/ragnos/`; `src/ragnos/core.py` provides a compatibility facade.
 
 ## Repository Structure
 
@@ -16,7 +14,7 @@ Phase 2 reorganized the implementation into smaller modules under `src/ragnos/` 
 - `src/ragnos/catalog.py`: per-document manifest and file-hash tracking
 - `src/ragnos/config.py`: config defaults, env parsing, prompt loading, validation
 - `src/ragnos/core.py`: compatibility facade over the modular implementation
-- `src/ragnos/documents.py`: PDF discovery, fingerprinting, loading, splitting, formatting
+- `src/ragnos/documents.py`: corpus discovery, fingerprinting, loading, splitting, formatting
 - `src/ragnos/evals.py`: local regression eval runner
 - `src/ragnos/health.py`: health report helpers
 - `src/ragnos/healthcheck.py`: healthcheck CLI
@@ -37,7 +35,7 @@ Phase 2 reorganized the implementation into smaller modules under `src/ragnos/` 
 
 ### Data and generated state
 
-- `documents/`: source PDFs
+- `tools/extracts/`: source corpus, including PDF documents and JSON video transcripts
 - `chroma_data/`: persisted Chroma index
 - `chroma_data/.fingerprint`: corpus fingerprint marker
 - `chroma_data/manifest.json`: per-document index manifest
@@ -60,9 +58,9 @@ Owns:
 
 Owns:
 
-- PDF discovery
+- corpus discovery
 - corpus fingerprinting
-- PDF loading
+- PDF and JSON loading
 - chunk splitting
 - retrieved-context formatting
 
@@ -84,7 +82,7 @@ Owns:
 - per-document file hashing
 - manifest read/write
 - record structure for indexed files
-- stable linkage between PDFs and chunk ids
+- stable linkage between source files and chunk ids
 
 ### `runtime.py`
 
@@ -168,7 +166,7 @@ uv run python ingest.py
 Flow:
 
 1. Load config from env vars and CLI overrides.
-2. Discover PDFs in `DOCS_DIR`.
+2. Discover supported files in `DOCS_DIR`.
 3. Compute a corpus fingerprint from file name, modification time, and size.
 4. Compare current documents against `manifest.json`.
 5. Skip unchanged files, upsert new/changed files, and delete removed-file chunks.
@@ -186,7 +184,7 @@ uv run chainlit run main.py
 Flow:
 
 1. Load and validate config, including `.prompt`.
-2. Validate that `DOCS_DIR` exists and contains PDFs, or offer upload if the corpus is empty.
+2. Validate that `DOCS_DIR` exists and contains supported files, or offer upload if the corpus is empty.
 3. Recompute the current corpus fingerprint.
 4. Verify that `CHROMA_DIR` exists, contains index artifacts, and has a matching `.fingerprint`.
 5. Expose in-chat `/upload`, `/refresh`, and `/status` commands.

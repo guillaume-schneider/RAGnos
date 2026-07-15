@@ -16,6 +16,7 @@ site/
 *.egg-info/
 chroma_data-build*
 /research
+.todo
 
 # Virtual environments
 .venv/
@@ -35,6 +36,18 @@ chroma_data/
 
 # Logs
 *.log
+
+# LaTeX build artifacts
+*.aux
+*.bbl
+*.bcf
+*.blg
+*.fdb_latexmk
+*.fls
+*.out
+*.run.xml
+*.synctex.gz
+*.toc
 
 # Node / docs site
 docs-site/node_modules/

@@ -1,0 +1,190 @@
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage{lmodern}
+\usepackage[french]{babel}
+\usepackage{csquotes}
+\usepackage{geometry}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{array}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\usepackage[backend=biber,style=authoryear,sorting=nyt]{biblatex}
+
+\geometry{margin=2.5cm}
+\setlength{\parskip}{0.65em}
+\setlength{\parindent}{0pt}
+\setlist[itemize]{leftmargin=1.2cm}
+\setlist[enumerate]{leftmargin=1.2cm}
+\renewcommand{\arraystretch}{1.2}
+
+\hypersetup{
+  colorlinks=true,
+  linkcolor=blue,
+  citecolor=blue,
+  urlcolor=blue,
+  pdftitle={RAGnos - Annexe juridique},
+  pdfauthor={Projet RAGnos}
+}
+
+\addbibresource{rapport_ragnos_juridique.bib}
+
+\title{\textbf{RAGnos : annexe juridique}\\
+\large Extraction du positionnement initial du projet}
+\author{Projet RAGnos}
+\date{5 juin 2026}
+
+\begin{document}
+
+\maketitle
+
+\begin{abstract}
+Cette annexe regroupe la partie juridique du cadrage initial de RAGnos. Elle est conservee comme materiau annexe afin de documenter le premier cas d'usage envisage pour le prototype, tout en sortant cette matiere du rapport principal desormais recentre sur l'information medicale en reanimation.
+\end{abstract}
+
+\tableofcontents
+\newpage
+
+\section{Positionnement juridique initial}
+
+Le cadrage initial de RAGnos partait d'un besoin simple : permettre a un utilisateur d'interroger un corpus documentaire juridique local sans exposer les documents a un service externe. Le cas d'usage vise etait celui d'un consultant juridique ayant besoin d'explorer des jurisprudences, codes, notes internes et documents de doctrine.
+
+Dans ce contexte, la valeur d'un systeme RAG ne venait pas d'une capacite generale a "bien repondre", mais de quatre proprietes plus strictes :
+
+\begin{itemize}
+  \item l'ancrage dans un corpus autorise ;
+  \item la tracabilite des sources ;
+  \item la capacite a refuser lorsqu'une information n'est pas dans les documents ;
+  \item la possibilite de garder une execution locale et maitrisable.
+\end{itemize}
+
+Le raisonnement etait le suivant : dans un contexte juridique, une reponse plausible mais fausse est plus dangereuse qu'une absence de reponse. Un systeme utile devait donc reduire l'improvisation du modele et imposer un comportement de consultation documentaire plutot qu'un comportement de generation libre \autocite{stanfordLegalHallucinations2024,legalRAGBench2026}.
+
+\section{Marche de l'IA juridique}
+
+\subsection{Lecture generale du marche}
+
+L'etat de l'art juridique etudiait un marche deja structure autour de corpus proprietaires, d'enrichissements editoriaux et de workflows metier. L'avantage competitif des solutions en place ne reposait pas uniquement sur le modele de langage, mais sur l'acces aux bonnes sources, leur organisation et la qualite des citations \autocite{researchLegalAIExhaustif,researchLegalRAGState}.
+
+Cette analyse conduisait a une conclusion importante pour RAGnos : un prototype local ne pouvait pas rivaliser frontalement avec les grands acteurs du juridique sur la profondeur documentaire, les citators, l'historique normatif ou la couverture des sources. En revanche, il pouvait servir de base experimentale pour comprendre l'architecture RAG, verifier le comportement du retrieval et tester un assistant documentaire local.
+
+\subsection{Solutions de reference}
+
+\begin{longtable}{p{3.1cm}p{4.2cm}p{4.5cm}p{3.2cm}}
+\caption{Synthese des solutions juridiques comparees dans le cadrage initial}\\
+\toprule
+\textbf{Solution} & \textbf{Positionnement} & \textbf{Forces principales} & \textbf{Limites pour RAGnos}\\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Solution} & \textbf{Positionnement} & \textbf{Forces principales} & \textbf{Limites pour RAGnos}\\
+\midrule
+\endhead
+Lexis+ AI / Protege & Recherche, redaction et analyse juridique integrees a l'ecosysteme LexisNexis. & Corpus juridique riche, sources secondaires, Shepard's Citations, citations liees. & Solution fermee, couteuse, dependante d'un corpus proprietaire et d'une licence. \\
+Westlaw / CoCounsel & Assistant professionnel adosse a Thomson Reuters, Westlaw et Practical Law. & Profondeur documentaire, KeyCite, recherche assistee, workflows avances. & Transparence limitee du pipeline et cout eleve pour de petites structures. \\
+vLex / Vincent AI & Recherche juridique internationale et travail multijuridictionnel. & Tres grande couverture internationale, documents editorialises, citations cliquables. & Architecture exacte peu publique ; valeur dependante de l'abonnement au corpus. \\
+Harvey AI & Copilote entreprise pour grands cabinets, directions juridiques et fiscalite. & Analyse documentaire, redaction, workflows, integrations avec sources partenaires. & Positionnement enterprise, cout eleve, dependance aux sources integrees. \\
+Paxton AI & Assistant juridique oriente validation de recherche et citations. & Focus sur la verifiabilite, prix plus accessible, ciblage des praticiens US. & Couverture surtout americaine ; profondeur editoriale moindre que les grands editeurs. \\
+Doctrine & Plateforme francaise/europeenne de recherche, analyse et redaction. & Corpus francais, workflow avocat/juriste, hebergement europeen, integrations documentaires. & Produit proprietaire ; ne repond pas au besoin d'un prototype local maitrise. \\
+Lexbase / GenIA-L & IA juridique francophone adossee a des fonds editoriaux. & Sources doctrinales et editoriales structurees, reponses documentees, contexte francais. & Ecosystemes fermes et economiques d'abonnement. \\
+LegalOn / Spellbook & Revue contractuelle, redaction, playbooks et integration Word. & Forte valeur sur contrats, clauses, redlining et standards internes. & Moins adapte a une recherche large en jurisprudence ou codes. \\
+Ordalie & RAG prive securise pour cabinets et documents internes. & Proximite avec le besoin de confidentialite, souverainete et corpus prive. & Offre externe ; RAGnos explorait une base interne et locale. \\
+\bottomrule
+\end{longtable}
+
+\subsection{Sources officielles et limites}
+
+Le cadrage juridique distinguait egalement les sources officielles des bases privees. Legifrance, EUR-Lex et HUDOC ont une forte autorite normative \autocite{legifranceOpenData,eurlex,hudoc}. Mais ces bases ne fournissent pas seules l'experience complete attendue par les professionnels : enrichissements editoriaux, citators, historique d'autorite, filtres metier ou outils de comparaison.
+
+Cette distinction nourrissait une hypothese structurante : meme avec une bonne architecture RAG, un corpus incomplet ou mal maintenu conduit a des reponses incompletes. La qualite du resultat depend donc directement de la qualite, de la temporalite et du perimetre du corpus fourni.
+
+\section{Besoins metier juridiques}
+
+\subsection{Besoin utilisateur initial}
+
+Le profil cible initial etait celui d'un consultant juridique travaillant sur des sources longues, techniques et evolutives. Les besoins identifies etaient :
+
+\begin{itemize}
+  \item retrouver rapidement un passage pertinent dans des documents longs ;
+  \item obtenir une synthese lisible d'un texte dense ;
+  \item verifier la source et revenir au document ;
+  \item reduire le temps de recherche manuelle ;
+  \item conserver la confidentialite du corpus ;
+  \item obtenir un refus fiable quand le corpus ne permet pas de repondre.
+\end{itemize}
+
+\subsection{Vision produit initiale}
+
+La vision juridique initiale de RAGnos etait volontairement modeste : non pas un juriste autonome, mais une interface documentaire locale au-dessus d'un corpus choisi par l'utilisateur. Cette vision etait plus defendable techniquement qu'une promesse d'assistant juridique universel.
+
+Les usages court terme identifies etaient :
+
+\begin{enumerate}
+  \item la question-reponse sourcee sur un ensemble de documents ;
+  \item l'exploration de corpus avec affichage des pages utilisees ;
+  \item le prototypage interne avant un investissement plus lourd.
+\end{enumerate}
+
+\section{Enseignements juridiques pour l'architecture RAG}
+
+\subsection{Le RAG comme reduction du risque}
+
+Le cadrage juridique insistait sur un point central : le RAG est un garde-fou, pas une garantie. Les travaux de Stanford HAI et \emph{Legal RAG Bench} montrent que les erreurs ne viennent pas uniquement de la generation, mais aussi de l'echec de recuperation des bons passages \autocite{stanfordLegalHallucinations2024,legalRAGBench2026}.
+
+Dans le juridique, une erreur peut prendre plusieurs formes :
+
+\begin{itemize}
+  \item citer une source inexistante ;
+  \item citer une source reelle mais hors sujet ;
+  \item confondre des versions temporelles d'un texte ;
+  \item manquer une exception ou une condition d'application ;
+  \item presenter comme actuel un etat du droit depasse.
+\end{itemize}
+
+\subsection{Versioning, temporalite, juridiction}
+
+Le droit etait analyse comme un domaine fortement temporel. Un article peut etre modifie, abroge, renumerote ou interprete differemment selon la date, la juridiction et le contentieux. Une base vectorielle seule ne porte pas naturellement cette information.
+
+Le cadrage initial soulignait donc que, pour un assistant juridique robuste, il faudrait idealement :
+
+\begin{itemize}
+  \item des metadonnees de date d'effet ;
+  \item des metadonnees de juridiction ;
+  \item un filtrage avant retrieval ;
+  \item une gestion du statut des textes ;
+  \item eventuellement un graphe de relations normatives.
+\end{itemize}
+
+\subsection{Recherche hybride et reranking}
+
+L'analyse juridique concluait qu'une architecture serieuse devait a terme combiner :
+
+\begin{itemize}
+  \item une recherche lexicale ou BM25 pour les references exactes ;
+  \item une recherche vectorielle pour les concepts ;
+  \item un reranker pour reordonner les candidats ;
+  \item des filtres metadonnees ;
+  \item une validation humaine finale.
+\end{itemize}
+
+RAGnos n'implementait alors que la couche vectorielle locale. Pour un prototype, cela restait acceptable. Pour un usage juridique professionnel, cela restait insuffisant.
+
+\section{Pourquoi cette matiere sort du rapport principal}
+
+Le projet n'est plus centre sur le juridique. Le coeur du besoin s'est deplace vers un assistant d'information medicale en reanimation, destine aux proches de patients hospitalises. La partie juridique conserve une valeur historique et methodologique :
+
+\begin{itemize}
+  \item elle documente le point de depart du projet ;
+  \item elle montre pourquoi la question des sources, des refus et de la tracabilite est structurante ;
+  \item elle peut servir de comparaison avec le domaine medical, qui partage lui aussi des exigences fortes de fiabilite, de prudence et de contextualisation.
+\end{itemize}
+
+Pour autant, elle ne doit plus structurer le rapport principal. Elle est donc deplacee dans cette annexe autonome, qui pourra etre referencee depuis le rapport medical final comme element d'historique de cadrage.
+
+\printbibliography
+
+\end{document}
+

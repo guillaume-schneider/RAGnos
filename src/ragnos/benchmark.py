@@ -22,7 +22,7 @@ def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Benchmark local RAG startup and query latency.")
     parser.add_argument("--question", required=True, help="Question to send through the RAG pipeline.")
     parser.add_argument("--repetitions", type=int, default=1, help="Number of uncached query runs to execute.")
-    parser.add_argument("--docs-dir", help="Directory containing PDF files.")
+    parser.add_argument("--docs-dir", help="Directory containing PDF and JSON corpus files.")
     parser.add_argument("--chroma-dir", help="Directory used for the Chroma index.")
     return parser.parse_args(argv)
 

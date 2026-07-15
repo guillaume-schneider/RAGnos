@@ -12,7 +12,7 @@ from langchain_ollama import ChatOllama, OllamaEmbeddings
 
 from .catalog import CATALOG_VERSION, CorpusCatalog, DocumentRecord, build_document_record, read_catalog, write_catalog
 from .config import AppConfig, INGEST_COMMAND
-from .documents import annotate_splits, get_docs_fingerprint, list_pdf_paths, load_all_pdfs, split_documents
+from .documents import annotate_splits, get_docs_fingerprint, list_document_paths, load_all_documents, split_documents
 
 
 @dataclass(frozen=True, slots=True)
@@ -20,22 +20,42 @@ class RuntimeValidation:
     status: str
     message: str
     docs_fingerprint: str | None = None
-    pdf_count: int = 0
+    document_count: int = 0
 
     @property
     def is_ready(self) -> bool:
         return self.status == "ready"
+
+    @property
+    def pdf_count(self) -> int:
+        return self.document_count
 
 
 @dataclass(frozen=True, slots=True)
 class IngestResult:
     status: str
     docs_fingerprint: str
-    pdf_count: int
-    page_count: int
+    document_count: int
+    unit_count: int
     chunk_count: int
-    indexed_pdf_count: int = 0
-    deleted_pdf_count: int = 0
+    indexed_document_count: int = 0
+    deleted_document_count: int = 0
+
+    @property
+    def pdf_count(self) -> int:
+        return self.document_count
+
+    @property
+    def page_count(self) -> int:
+        return self.unit_count
+
+    @property
+    def indexed_pdf_count(self) -> int:
+        return self.indexed_document_count
+
+    @property
+    def deleted_pdf_count(self) -> int:
+        return self.deleted_document_count
 
 
 class IngestError(RuntimeError):
@@ -74,24 +94,24 @@ def validate_runtime_readiness(config: AppConfig) -> RuntimeValidation:
             message=f"Dossier introuvable : {config.docs_dir}",
         )
 
-    pdf_paths = list_pdf_paths(config.docs_dir)
-    if not pdf_paths:
+    document_paths = list_document_paths(config.docs_dir)
+    if not document_paths:
         return RuntimeValidation(
-            status="no_pdfs",
+            status="no_documents",
             message=(
-                f"Aucun PDF trouve dans {config.docs_dir}\n"
-                f"Ajoutez des PDF puis executez `{INGEST_COMMAND}`."
+                f"Aucun document supporte trouve dans {config.docs_dir}\n"
+                f"Ajoutez des PDF ou JSON puis executez `{INGEST_COMMAND}`."
             ),
         )
 
-    docs_fingerprint = get_docs_fingerprint(pdf_paths)
+    docs_fingerprint = get_docs_fingerprint(document_paths)
 
     if not config.chroma_dir.exists():
         return RuntimeValidation(
             status="missing_index",
             message=f"Index introuvable.\nExecutez `{INGEST_COMMAND}`.",
             docs_fingerprint=docs_fingerprint,
-            pdf_count=len(pdf_paths),
+            document_count=len(document_paths),
         )
 
     if not has_index_artifacts(config.chroma_dir):
@@ -99,7 +119,7 @@ def validate_runtime_readiness(config: AppConfig) -> RuntimeValidation:
             status="empty_index",
             message=f"Index vide ou incomplet.\nExecutez `{INGEST_COMMAND}`.",
             docs_fingerprint=docs_fingerprint,
-            pdf_count=len(pdf_paths),
+            document_count=len(document_paths),
         )
 
     existing_fingerprint = read_index_fingerprint(config.chroma_dir)
@@ -108,7 +128,7 @@ def validate_runtime_readiness(config: AppConfig) -> RuntimeValidation:
             status="missing_fingerprint",
             message=f"Empreinte d'index introuvable.\nExecutez `{INGEST_COMMAND}`.",
             docs_fingerprint=docs_fingerprint,
-            pdf_count=len(pdf_paths),
+            document_count=len(document_paths),
         )
 
     if existing_fingerprint != docs_fingerprint:
@@ -116,14 +136,14 @@ def validate_runtime_readiness(config: AppConfig) -> RuntimeValidation:
             status="stale_index",
             message=f"L'index est obsolete.\nExecutez `{INGEST_COMMAND}`.",
             docs_fingerprint=docs_fingerprint,
-            pdf_count=len(pdf_paths),
+            document_count=len(document_paths),
         )
 
     return RuntimeValidation(
         status="ready",
         message="ok",
         docs_fingerprint=docs_fingerprint,
-        pdf_count=len(pdf_paths),
+        document_count=len(document_paths),
     )
 
 
@@ -199,10 +219,10 @@ def create_temp_build_directory(chroma_dir: Path) -> Path:
         return candidate
 
 
-def _current_document_records(config: AppConfig, pdf_paths: Sequence[Path]) -> dict[str, DocumentRecord]:
+def _current_document_records(config: AppConfig, document_paths: Sequence[Path]) -> dict[str, DocumentRecord]:
     return {
-        pdf_path.relative_to(config.docs_dir).as_posix(): build_document_record(config.docs_dir, pdf_path)
-        for pdf_path in pdf_paths
+        document_path.relative_to(config.docs_dir).as_posix(): build_document_record(config.docs_dir, document_path)
+        for document_path in document_paths
     }
 
 
@@ -214,25 +234,31 @@ def _needs_full_rebuild(config: AppConfig, catalog: CorpusCatalog | None) -> boo
 
 def _rebuild_full_index(
     config: AppConfig,
-    pdf_paths: Sequence[Path],
+    document_paths: Sequence[Path],
     docs_fingerprint: str,
     current_records: dict[str, DocumentRecord],
 ) -> IngestResult:
-    raw_docs, _ = load_all_pdfs(config.docs_dir, pdf_paths)
+    raw_docs, _ = load_all_documents(config.docs_dir, document_paths)
     splits = split_documents(raw_docs, config)
 
     all_chunk_ids: list[str] = []
-    for pdf_path in pdf_paths:
-        relative_path = pdf_path.relative_to(config.docs_dir).as_posix()
+    for document_path in document_paths:
+        relative_path = document_path.relative_to(config.docs_dir).as_posix()
         record = current_records[relative_path]
-        source_splits = [split for split in splits if Path(split.metadata.get("source", "")).resolve() == pdf_path.resolve()]
+        source_splits = [
+            split
+            for split in splits
+            if Path(split.metadata.get("source", "")).resolve() == document_path.resolve()
+        ]
         chunk_ids = annotate_splits(source_splits, relative_path, record.file_hash)
         current_records[relative_path] = DocumentRecord(
             relative_path=record.relative_path,
             file_hash=record.file_hash,
             file_size=record.file_size,
             modified_ns=record.modified_ns,
-            page_count=len([doc for doc in raw_docs if Path(doc.metadata.get("source", "")).resolve() == pdf_path.resolve()]),
+            page_count=len(
+                [doc for doc in raw_docs if Path(doc.metadata.get("source", "")).resolve() == document_path.resolve()]
+            ),
             chunk_ids=chunk_ids,
         )
         all_chunk_ids.extend(chunk_ids)
@@ -257,11 +283,11 @@ def _rebuild_full_index(
     return IngestResult(
         status="rebuilt",
         docs_fingerprint=docs_fingerprint,
-        pdf_count=len(pdf_paths),
-        page_count=len(raw_docs),
+        document_count=len(document_paths),
+        unit_count=len(raw_docs),
         chunk_count=len(splits),
-        indexed_pdf_count=len(pdf_paths),
-        deleted_pdf_count=0,
+        indexed_document_count=len(document_paths),
+        deleted_document_count=0,
     )
 
 
@@ -269,16 +295,16 @@ def ingest_corpus(config: AppConfig) -> IngestResult:
     if not config.docs_dir.exists():
         raise IngestError(f"Dossier introuvable : {config.docs_dir}")
 
-    pdf_paths = list_pdf_paths(config.docs_dir)
-    if not pdf_paths:
-        raise IngestError(f"Aucun PDF trouve dans {config.docs_dir}")
+    document_paths = list_document_paths(config.docs_dir)
+    if not document_paths:
+        raise IngestError(f"Aucun document supporte trouve dans {config.docs_dir}")
 
-    docs_fingerprint = get_docs_fingerprint(pdf_paths)
-    current_records = _current_document_records(config, pdf_paths)
+    docs_fingerprint = get_docs_fingerprint(document_paths)
+    current_records = _current_document_records(config, document_paths)
     catalog = read_catalog(config.chroma_dir)
 
     if _needs_full_rebuild(config, catalog):
-        return _rebuild_full_index(config, pdf_paths, docs_fingerprint, current_records)
+        return _rebuild_full_index(config, document_paths, docs_fingerprint, current_records)
 
     existing_records = catalog.documents
     deleted_paths = sorted(set(existing_records) - set(current_records))
@@ -292,11 +318,11 @@ def ingest_corpus(config: AppConfig) -> IngestResult:
         return IngestResult(
             status="up_to_date",
             docs_fingerprint=docs_fingerprint,
-            pdf_count=len(pdf_paths),
-            page_count=0,
+            document_count=len(document_paths),
+            unit_count=0,
             chunk_count=0,
-            indexed_pdf_count=0,
-            deleted_pdf_count=0,
+            indexed_document_count=0,
+            deleted_document_count=0,
         )
 
     embeddings = create_embeddings(config)
@@ -323,8 +349,8 @@ def ingest_corpus(config: AppConfig) -> IngestResult:
             if existing_record and existing_record.chunk_ids:
                 vectorstore.delete(ids=existing_record.chunk_ids)
 
-            pdf_path = config.docs_dir / relative_path
-            raw_docs, _ = load_all_pdfs(config.docs_dir, [pdf_path])
+            document_path = config.docs_dir / relative_path
+            raw_docs, _ = load_all_documents(config.docs_dir, [document_path])
             splits = split_documents(raw_docs, config)
             chunk_ids = annotate_splits(splits, relative_path, current_record.file_hash)
             if splits:
@@ -349,9 +375,9 @@ def ingest_corpus(config: AppConfig) -> IngestResult:
     return IngestResult(
         status="rebuilt",
         docs_fingerprint=docs_fingerprint,
-        pdf_count=len(pdf_paths),
-        page_count=indexed_page_count,
+        document_count=len(document_paths),
+        unit_count=indexed_page_count,
         chunk_count=indexed_chunk_count,
-        indexed_pdf_count=len(changed_paths),
-        deleted_pdf_count=len(deleted_paths),
+        indexed_document_count=len(changed_paths),
+        deleted_document_count=len(deleted_paths),
     )

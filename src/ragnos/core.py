@@ -24,7 +24,16 @@ from .config import (
     load_config,
 )
 from .catalog import CATALOG_FILENAME, CATALOG_VERSION, CorpusCatalog, DocumentRecord, build_document_record, catalog_file, read_catalog, write_catalog
-from .documents import format_docs, get_docs_fingerprint, list_pdf_paths, load_all_pdfs, split_documents
+from .documents import (
+    SUPPORTED_DOCUMENT_SUFFIXES,
+    format_docs,
+    get_docs_fingerprint,
+    list_document_paths,
+    list_pdf_paths,
+    load_all_documents,
+    load_all_pdfs,
+    split_documents,
+)
 from .health import HealthCheck, HealthReport, build_health_report, format_health_report
 from .indexing import (
     IngestError,
@@ -81,6 +90,7 @@ __all__ = [
     "IngestResult",
     "PromptError",
     "RuntimeValidation",
+    "SUPPORTED_DOCUMENT_SUFFIXES",
     "SYSTEM_PROMPT_TEXT",
     "build_cache_key",
     "build_cache_namespace",
@@ -99,7 +109,9 @@ __all__ = [
     "has_index_artifacts",
     "index_matches_fingerprint",
     "ingest_corpus",
+    "list_document_paths",
     "list_pdf_paths",
+    "load_all_documents",
     "load_all_pdfs",
     "load_config",
     "load_prompt_text",

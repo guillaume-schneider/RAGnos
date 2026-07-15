@@ -16,7 +16,7 @@ from ragnos.telemetry import log_event
 
 def parse_args(argv: Sequence[str] | None = None) -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="Build or refresh the local RAG index.")
-    parser.add_argument("--docs-dir", help="Directory containing PDF files.")
+    parser.add_argument("--docs-dir", help="Directory containing PDF and JSON corpus files.")
     parser.add_argument("--chroma-dir", help="Directory used for the Chroma index.")
     return parser.parse_args(argv)
 
@@ -45,19 +45,19 @@ def main(argv: Sequence[str] | None = None) -> int:
         {
             "event": "ingest_complete",
             "status": result.status,
-            "documents_count": result.pdf_count,
-            "pages_count": result.page_count,
+            "documents_count": result.document_count,
+            "units_count": result.unit_count,
             "chunks_count": result.chunk_count,
             "chroma_dir": str(config.chroma_dir),
         }
     )
 
     if result.status == "up_to_date":
-        print(f"Index already up to date for {result.pdf_count} PDF(s).")
+        print(f"Index already up to date for {result.document_count} document(s).")
     else:
         print(
             "Index rebuilt successfully "
-            f"for {result.pdf_count} PDF(s), {result.page_count} page(s), {result.chunk_count} chunk(s)."
+            f"for {result.document_count} document(s), {result.unit_count} unit(s), {result.chunk_count} chunk(s)."
         )
     return 0
 
